@@ -1,0 +1,12 @@
+node_modules
+.next
+*.log
+dev.db
+dev.db-shm
+dev.db-wal
+.env
+.env.local
+.env.*.local
+.vercel
+dist
+*.tsbuildinfo
