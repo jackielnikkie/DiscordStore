@@ -34,21 +34,34 @@ async function call<T>(
   payload: Record<string, unknown>,
   timeoutMs = 20_000,
 ) {
-  const response = await fetch(`${TELEGRAM_API}${token}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const json = (await response.json()) as TelegramResponse<T>;
+  try {
+    const response = await fetch(`${TELEGRAM_API}${token}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+      signal: controller.signal,
+    });
 
-  if (!json.ok) {
-    throw new Error(json.description || `Telegram ${method} gagal`);
+    const json = (await response.json()) as TelegramResponse<T>;
+
+    if (!json.ok) {
+      throw new Error(json.description || `Telegram ${method} gagal`);
+    }
+
+    return json.result as T;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Telegram ${method} timeout ${Math.round(timeoutMs / 1000)}s`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return json.result as T;
 }
 
 export async function resolveTelegramToken() {
