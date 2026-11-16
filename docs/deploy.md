@@ -31,6 +31,9 @@ Wajib diisi:
 
 Token Discord/Telegram dan key Paymenku boleh diisi dari panel admin setelah jalan.
 
+> Penting: hash bcrypt mengandung karakter `$`. Docker Compose menginterpolasi `$` di `.env`, jadi tulis **`$$`** untuk setiap `$`:
+> `ADMIN_PASSWORD_HASH="$$2b$$12$$abcdef..."`. Verifikasi dengan `docker compose exec app printenv ADMIN_PASSWORD_HASH`.
+
 ## 3. Akses image GHCR
 
 Image dibangun GitHub Actions dan dipush ke `ghcr.io/jackielnikkie/discordstore`.
