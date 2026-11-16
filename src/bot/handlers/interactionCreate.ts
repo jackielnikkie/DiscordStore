@@ -19,7 +19,7 @@ import { prisma } from "../../lib/db";
 import { formatRupiah } from "../../lib/money";
 import { getAllSettings } from "../../lib/settings";
 import { checkOrderPaymentStatus } from "../../services/paymentService";
-import { createOrderFromDiscordInteraction } from "../../services/orderService";
+import { createOrder } from "../../services/orderService";
 import { getProductById } from "../../services/productService";
 
 export function registerInteractionHandler(client: Client) {
@@ -135,9 +135,10 @@ async function handleBuyQuantitySubmit(interaction: ModalSubmitInteraction) {
       return;
     }
 
-    const order = await createOrderFromDiscordInteraction({
-      discordUserId: interaction.user.id,
-      discordUsername: interaction.user.username,
+    const order = await createOrder({
+      platform: "discord",
+      customerId: interaction.user.id,
+      customerName: interaction.user.username,
       productId,
       quantity,
     });
@@ -187,7 +188,7 @@ async function handleCheckPaymentInteraction(interaction: ButtonInteraction) {
 async function sendInvoiceDm(
   client: Client<true>,
   userId: string,
-  order: Awaited<ReturnType<typeof createOrderFromDiscordInteraction>>,
+  order: Awaited<ReturnType<typeof createOrder>>,
 ) {
   const embed = new EmbedBuilder()
     .setTitle(`Invoice ${order.referenceId}`)

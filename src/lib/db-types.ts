@@ -68,6 +68,7 @@ export type StockItem = {
 export type Order = {
   id: string;
   referenceId: string;
+  platform: string;
   discordUserId: string;
   discordUsername: string | null;
   productId: string;

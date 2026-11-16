@@ -37,8 +37,18 @@ function getDatabase() {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec(schemaSql);
+  // ponytail: CREATE TABLE IF NOT EXISTS tak menambah kolom ke DB lama; ALTER manual cukup sampai ada migrasi sungguhan.
+  ensureColumn(db, "Order", "platform", "TEXT NOT NULL DEFAULT 'discord'");
   globalThis.sqliteDbGlobal = db;
   return db;
+}
+
+function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string) {
+  const columns = db.prepare(`PRAGMA table_info("${table}")`).all() as Row[];
+
+  if (!columns.some((row) => row.name === column)) {
+    db.exec(`ALTER TABLE "${table}" ADD COLUMN ${column} ${definition}`);
+  }
 }
 
 function nowIso() {
@@ -90,6 +100,7 @@ function rowToOrder(row: Row) {
     amountReceived:
       row.amountReceived === null ? null : Number(row.amountReceived ?? 0),
     isSandbox: normalizeNullableBoolean(row.isSandbox),
+    platform: String(row.platform || "discord"),
     status: String(row.status || OrderStatus.PENDING),
   };
 }
@@ -487,13 +498,14 @@ export const prisma: any = {
       const id = data.id || cuid();
       run(
         `INSERT INTO "Order" (
-          id, referenceId, discordUserId, discordUsername, productId, quantity, unitPrice, subtotal,
+          id, referenceId, platform, discordUserId, discordUsername, productId, quantity, unitPrice, subtotal,
           paymentAmount, status, paymenkuTrxId, paymenkuPayUrl, paymenkuQrUrl, paymenkuQrString,
           paymenkuRawJson, paymentChannel, totalFee, amountReceived, isSandbox, expiresAt, paidAt,
           deliveredAt, deliveryError, buyAlertSentAt, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         data.referenceId,
+        data.platform ?? "discord",
         data.discordUserId,
         data.discordUsername ?? null,
         data.productId,
@@ -526,12 +538,13 @@ export const prisma: any = {
       const next = mergeOrderUpdate(current, data);
       run(
         `UPDATE "Order" SET
-          referenceId = ?, discordUserId = ?, discordUsername = ?, productId = ?, quantity = ?, unitPrice = ?, subtotal = ?,
+          referenceId = ?, platform = ?, discordUserId = ?, discordUsername = ?, productId = ?, quantity = ?, unitPrice = ?, subtotal = ?,
           paymentAmount = ?, status = ?, paymenkuTrxId = ?, paymenkuPayUrl = ?, paymenkuQrUrl = ?, paymenkuQrString = ?,
           paymenkuRawJson = ?, paymentChannel = ?, totalFee = ?, amountReceived = ?, isSandbox = ?, expiresAt = ?, paidAt = ?,
           deliveredAt = ?, deliveryError = ?, buyAlertSentAt = ?, updatedAt = ?
          WHERE id = ?`,
         next.referenceId,
+        next.platform ?? "discord",
         next.discordUserId,
         next.discordUsername ?? null,
         next.productId,
@@ -743,6 +756,7 @@ CREATE TABLE IF NOT EXISTS Product (
 CREATE TABLE IF NOT EXISTS "Order" (
   id TEXT PRIMARY KEY,
   referenceId TEXT NOT NULL UNIQUE,
+  platform TEXT NOT NULL DEFAULT 'discord',
   discordUserId TEXT NOT NULL,
   discordUsername TEXT,
   productId TEXT NOT NULL,

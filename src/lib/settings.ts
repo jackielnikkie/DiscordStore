@@ -36,10 +36,20 @@ export type TextSettings = {
   embedFooter: string;
 };
 
+export type TelegramSettings = {
+  telegramEnabled: boolean;
+  telegramBotToken: string;
+  telegramAdminChannelId: string;
+  telegramBotUsername: string;
+  telegramReadyState: string;
+  telegramLastHeartbeatAt: string;
+};
+
 export type AppSettings = {
   bot: BotSettings;
   payment: PaymentSettings;
   text: TextSettings;
+  telegram: TelegramSettings;
 };
 
 const botDefaults: BotSettings = {
@@ -113,9 +123,19 @@ const textDefaults: TextSettings = {
   embedFooter: "DiscordStore • Auto order",
 };
 
+const telegramDefaults: TelegramSettings = {
+  telegramEnabled: false,
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
+  telegramAdminChannelId: "",
+  telegramBotUsername: "",
+  telegramReadyState: "offline",
+  telegramLastHeartbeatAt: "",
+};
+
 const botKeys = Object.keys(botDefaults) as (keyof BotSettings)[];
 const paymentKeys = Object.keys(paymentDefaults) as (keyof PaymentSettings)[];
 const textKeys = Object.keys(textDefaults) as (keyof TextSettings)[];
+const telegramKeys = Object.keys(telegramDefaults) as (keyof TelegramSettings)[];
 
 export async function getAllSettings(): Promise<AppSettings> {
   const rows = await prisma.setting.findMany();
@@ -177,6 +197,23 @@ export async function getAllSettings(): Promise<AppSettings> {
         map.get("embedDescription") || textDefaults.embedDescription,
       embedFooter: map.get("embedFooter") || textDefaults.embedFooter,
     },
+    telegram: {
+      ...telegramDefaults,
+      telegramEnabled: parseBoolean(
+        map.get("telegramEnabled"),
+        telegramDefaults.telegramEnabled,
+      ),
+      telegramBotToken:
+        map.get("telegramBotToken") || telegramDefaults.telegramBotToken,
+      telegramAdminChannelId:
+        map.get("telegramAdminChannelId") || telegramDefaults.telegramAdminChannelId,
+      telegramBotUsername:
+        map.get("telegramBotUsername") || telegramDefaults.telegramBotUsername,
+      telegramReadyState:
+        map.get("telegramReadyState") || telegramDefaults.telegramReadyState,
+      telegramLastHeartbeatAt:
+        map.get("telegramLastHeartbeatAt") || telegramDefaults.telegramLastHeartbeatAt,
+    },
   };
 }
 
@@ -192,8 +229,12 @@ export async function getTextSettings() {
   return (await getAllSettings()).text;
 }
 
+export async function getTelegramSettings() {
+  return (await getAllSettings()).telegram;
+}
+
 export async function saveSettings(
-  input: Partial<BotSettings & PaymentSettings & TextSettings>,
+  input: Partial<BotSettings & PaymentSettings & TextSettings & TelegramSettings>,
 ) {
   const entries = Object.entries(input).filter(([, value]) => value !== undefined);
 
@@ -232,6 +273,17 @@ export async function savePaymentSettings(
 
 export async function saveTextSettings(input: Partial<TextSettings>) {
   await saveSettings(input);
+}
+
+export async function saveTelegramSettings(
+  input: Partial<TelegramSettings>,
+  options?: { preserveSecrets?: boolean },
+) {
+  const current = await getTelegramSettings();
+
+  await saveSettings({
+    ...normalizePartialSettings(current, input, options),
+  });
 }
 
 export async function requestEmbedSync() {
@@ -299,6 +351,12 @@ export function getMaskedSettingsSnapshot(settings: AppSettings) {
         ? maskSecret(settings.payment.paymenkuWebhookSecret)
         : "",
     },
+    telegram: {
+      ...settings.telegram,
+      telegramBotToken: settings.telegram.telegramBotToken
+        ? maskSecret(settings.telegram.telegramBotToken)
+        : "",
+    },
   };
 }
 
@@ -318,7 +376,7 @@ function normalizePartialSettings<T extends Record<string, string | boolean>>(
   const next = { ...input };
 
   if (options?.preserveSecrets) {
-    for (const key of [...botKeys, ...paymentKeys]) {
+    for (const key of [...botKeys, ...paymentKeys, ...telegramKeys]) {
       const typedKey = key as keyof T;
       const value = next[typedKey];
 

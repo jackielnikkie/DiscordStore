@@ -2,7 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  allowedDevOrigins: ["192.168.1.5"],
+  allowedDevOrigins: (process.env.ALLOWED_DEV_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   serverExternalPackages: ["discord.js", "@discordjs/ws", "zlib-sync"],
   webpack: (config) => {
     config.resolve = config.resolve || {};

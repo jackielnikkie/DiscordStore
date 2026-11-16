@@ -17,11 +17,14 @@ import { prisma } from "../../lib/db";
 import {
   detectPaymenkuMode,
   getPaymentSettings,
+  getTelegramSettings,
   requestEmbedSync,
   saveBotSettings,
   savePaymentSettings,
+  saveTelegramSettings,
   saveTextSettings,
 } from "../../lib/settings";
+import { getTelegramMe, sendTelegramMessage } from "../../lib/telegram";
 import {
   botSettingsSchema,
   embedSettingsSchema,
@@ -30,6 +33,7 @@ import {
   productSchema,
   stockAddSchema,
   stockImportSchema,
+  telegramSettingsSchema,
   textSettingsSchema,
 } from "../../lib/validators";
 import { cancelOrder, markOrderPaid, resendDelivery } from "../../services/orderService";
@@ -240,6 +244,62 @@ export async function saveBotSettingsAction(formData: FormData) {
       redirectTo,
       "error",
       formatActionError(error, "Bot settings gagal disimpan"),
+    );
+  }
+}
+
+export async function saveTelegramSettingsAction(formData: FormData) {
+  await requireAdminSession();
+  const redirectTo = getRedirectTarget(formData, "/admin/settings/telegram");
+
+  try {
+    const input = telegramSettingsSchema.parse(Object.fromEntries(formData));
+    await saveTelegramSettings(input, { preserveSecrets: true });
+    revalidateEverywhere();
+    redirectWithState(
+      redirectTo,
+      "message",
+      "Telegram settings tersimpan. Worker memakai token baru dalam ±15 detik.",
+    );
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    redirectWithState(
+      redirectTo,
+      "error",
+      formatActionError(error, "Telegram settings gagal disimpan"),
+    );
+  }
+}
+
+export async function testTelegramAction(formData: FormData) {
+  await requireAdminSession();
+  const redirectTo = getRedirectTarget(formData, "/admin/settings/telegram");
+
+  try {
+    const settings = await getTelegramSettings();
+
+    if (!settings.telegramBotToken) {
+      redirectWithState(redirectTo, "error", "Token bot Telegram belum diisi");
+    }
+
+    const me = await getTelegramMe(settings.telegramBotToken);
+    let message = `Bot login sebagai @${me.username}.`;
+
+    if (settings.telegramAdminChannelId) {
+      await sendTelegramMessage(
+        settings.telegramAdminChannelId,
+        "Tes koneksi bot dari dashboard DiscordStore.",
+      );
+      message += " Pesan tes terkirim ke chat admin.";
+    }
+
+    redirectWithState(redirectTo, "message", message);
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    redirectWithState(
+      redirectTo,
+      "error",
+      formatActionError(error, "Tes koneksi Telegram gagal"),
     );
   }
 }
@@ -463,6 +523,7 @@ function revalidateEverywhere() {
   revalidatePath("/admin/orders");
   revalidatePath("/admin/payments");
   revalidatePath("/admin/settings/bot");
+  revalidatePath("/admin/settings/telegram");
   revalidatePath("/admin/settings/payment");
   revalidatePath("/admin/settings/text");
   revalidatePath("/admin/settings/embed");

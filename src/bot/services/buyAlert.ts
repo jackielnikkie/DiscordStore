@@ -3,45 +3,54 @@ import type { Client } from "discord.js";
 import { sendTextChannelMessage, withDiscordClient } from "../../lib/discord";
 import { renderTemplate } from "../../lib/templates";
 import { getAllSettings } from "../../lib/settings";
+import { sendTelegramAdminAlert } from "../../lib/notify";
 
 type ReadyClient = Client<true>;
 
 type AlertPayload = {
-  discordUserId: string;
-  discordUsername: string;
+  platform?: string | null;
+  customerId: string;
+  customerName: string;
   productName: string;
   quantity: number;
 };
 
 export async function sendBuyAlert(payload: AlertPayload, client?: ReadyClient) {
   const settings = await getAllSettings();
-
-  if (!settings.bot.enableBuyAlert || !settings.bot.buyAlertChannelId) {
-    return { ok: false, message: "Buy alert tidak aktif." };
-  }
-
-  const content = renderTemplate(normalizeBuyAlertTemplate(settings.text.buyAlertTemplate), {
-    user: `<@${payload.discordUserId}>`,
-    username: payload.discordUsername || payload.discordUserId,
+  const content = renderTemplate(settings.text.buyAlertTemplate, {
+    user:
+      payload.platform === "telegram"
+        ? payload.customerName || payload.customerId
+        : `<@${payload.customerId}>`,
+    username: payload.customerName || payload.customerId,
     productName: payload.productName,
     quantity: payload.quantity,
   });
 
-  const run = async (activeClient: ReadyClient) => {
-    await sendTextChannelMessage(activeClient, settings.bot.buyAlertChannelId, {
-      content,
-    });
+  const results: boolean[] = [];
 
-    return { ok: true };
-  };
+  if (settings.bot.enableBuyAlert && settings.bot.buyAlertChannelId) {
+    const run = async (activeClient: ReadyClient) => {
+      await sendTextChannelMessage(activeClient, settings.bot.buyAlertChannelId, {
+        content,
+      });
+    };
 
-  if (client) {
-    return run(client);
+    if (client) {
+      await run(client).catch(() => null);
+      results.push(true);
+    } else if (settings.bot.discordBotToken) {
+      await withDiscordClient(run, settings.bot.discordBotToken).catch(() => null);
+      results.push(true);
+    }
   }
 
-  return withDiscordClient(run, settings.bot.discordBotToken);
-}
+  if (settings.telegram.telegramEnabled && settings.telegram.telegramAdminChannelId) {
+    const sent = await sendTelegramAdminAlert(content).catch(() => false);
+    results.push(sent);
+  }
 
-function normalizeBuyAlertTemplate(template: string) {
-  return template.replace(/@\{\{\s*username\s*\}\}/g, "{{user}}");
+  return results.some(Boolean)
+    ? { ok: true }
+    : { ok: false, message: "Buy alert tidak aktif." };
 }

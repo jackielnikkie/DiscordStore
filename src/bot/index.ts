@@ -2,6 +2,7 @@ import { Events, type Client as DiscordClient } from "discord.js";
 
 import { registerInteractionHandler } from "./handlers/interactionCreate";
 import { syncAutoOrderEmbed } from "./services/embedSync";
+import { startTelegramWorker } from "./telegram";
 import { createDiscordClient } from "../lib/discord";
 import { markBotStatus } from "../lib/bot-runtime";
 import { getAllSettings } from "../lib/settings";
@@ -95,23 +96,30 @@ async function start() {
         });
       }
     }, 20_000);
-
-    setInterval(async () => {
-      const pendingOrders = await prisma.order.findMany({
-        where: {
-          status: "PENDING",
-        },
-        take: 20,
-        orderBy: { createdAt: "asc" },
-      });
-
-      for (const order of pendingOrders) {
-        await checkOrderPaymentStatus(order.id).catch((error) => {
-          console.error(`[bot] cek status gagal untuk ${order.referenceId}`, error);
-        });
-      }
-    }, 60_000);
   }
 }
 
+function startOrderPoller() {
+  const tick = async () => {
+    const pendingOrders = await prisma.order.findMany({
+      where: {
+        status: "PENDING",
+      },
+      take: 20,
+      orderBy: { createdAt: "asc" },
+    });
+
+    for (const order of pendingOrders) {
+      await checkOrderPaymentStatus(order.id).catch((error) => {
+        console.error(`[bot] cek status gagal untuk ${order.referenceId}`, error);
+      });
+    }
+  };
+
+  void tick();
+  setInterval(() => void tick(), 60_000);
+}
+
 void start();
+void startTelegramWorker();
+startOrderPoller();

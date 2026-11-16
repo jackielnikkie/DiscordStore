@@ -98,6 +98,12 @@ export const paymentSettingsSchema = z.object({
   returnUrl: z.string().trim().url().optional().or(z.literal("")),
 });
 
+export const telegramSettingsSchema = z.object({
+  telegramEnabled: stringToBoolean(false),
+  telegramBotToken: z.string().trim().optional().or(z.literal("")),
+  telegramAdminChannelId: z.string().trim().optional().or(z.literal("")),
+});
+
 export const textSettingsSchema = z.object({
   dmTestText: z.string().trim().min(1),
   dmInvoiceText: z.string().trim().min(1),

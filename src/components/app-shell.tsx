@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Settings, Package, ShoppingCart, CreditCard, Bot, MessageSquare, Type, Image, LogOut, LayoutDashboard } from "lucide-react";
+import { Settings, Package, ShoppingCart, CreditCard, Bot, MessageSquare, Type, Image, LogOut, LayoutDashboard, Send } from "lucide-react";
 
 import { logoutAction } from "../app/admin/actions";
 import { requireAdminSession } from "../lib/auth";
@@ -33,6 +33,7 @@ const navItems = [
 
 const settingsItems = [
   { href: "/admin/settings/bot", label: "Bot Settings", icon: Bot },
+  { href: "/admin/settings/telegram", label: "Telegram", icon: Send },
   { href: "/admin/settings/payment", label: "Payment Settings", icon: CreditCard },
   { href: "/admin/settings/text", label: "Text Templates", icon: Type },
   { href: "/admin/settings/embed", label: "Embed Settings", icon: Image },

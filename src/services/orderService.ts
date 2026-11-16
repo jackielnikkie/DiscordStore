@@ -4,11 +4,9 @@ import {
   type Order as PrismaOrder,
   type Product,
 } from "../lib/db-types";
-import type { Client as DiscordClient } from "discord.js";
-
 import { sendBuyAlert } from "../bot/services/buyAlert";
 import { syncAutoOrderEmbed } from "../bot/services/embedSync";
-import { sendDirectMessage, withDiscordClient } from "../lib/discord";
+import { sendCustomerMessage } from "../lib/notify";
 import { formatRupiah, parseMoney } from "../lib/money";
 import { createPaymenkuTransaction } from "../lib/paymenku";
 import { getAllSettings, requestEmbedSync } from "../lib/settings";
@@ -21,9 +19,10 @@ import {
   reserveStock,
 } from "./stockService";
 
-type DiscordOrderInput = {
-  discordUserId: string;
-  discordUsername?: string;
+type OrderInput = {
+  platform?: "discord" | "telegram";
+  customerId: string;
+  customerName?: string;
   productId: string;
   quantity?: number;
 };
@@ -49,7 +48,7 @@ type OrderWithRelations = PrismaOrder & {
 
 const ORDER_EXPIRY_MINUTES = 10;
 
-export async function createOrderFromDiscordInteraction(input: DiscordOrderInput) {
+export async function createOrder(input: OrderInput) {
   const quantity = input.quantity || 1;
   const product = await prisma.product.findUnique({
     where: { id: input.productId },
@@ -57,6 +56,32 @@ export async function createOrderFromDiscordInteraction(input: DiscordOrderInput
 
   if (!product || !product.isActive) {
     throw new Error("Produk tidak tersedia");
+  }
+
+  // Reuse invoice pending yang masih hidup supaya buyer tidak punya 2 QR aktif.
+  const platform = input.platform || "discord";
+  const existing = await prisma.order.findMany({
+    where: {
+      platform,
+      discordUserId: input.customerId,
+      productId: product.id,
+      status: OrderStatus.PENDING,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+  });
+
+  const reusable = existing[0];
+
+  if (
+    reusable?.paymenkuPayUrl &&
+    reusable.expiresAt &&
+    new Date(reusable.expiresAt).getTime() > Date.now()
+  ) {
+    return prisma.order.findUnique({
+      where: { id: reusable.id },
+      include: { product: true, soldStocks: true, reservedStocks: true },
+    });
   }
 
   if (product.type === ProductType.STOCK_LINE) {
@@ -71,8 +96,9 @@ export async function createOrderFromDiscordInteraction(input: DiscordOrderInput
   const order = await prisma.order.create({
     data: {
       referenceId,
-      discordUserId: input.discordUserId,
-      discordUsername: input.discordUsername || "",
+      platform,
+      discordUserId: input.customerId,
+      discordUsername: input.customerName || "",
       productId: product.id,
       quantity,
       unitPrice: product.price,
@@ -89,8 +115,8 @@ export async function createOrderFromDiscordInteraction(input: DiscordOrderInput
     const payment = await createPaymenkuTransaction({
       amount: order.subtotal,
       referenceId: order.referenceId,
-      customerName: input.discordUsername || input.discordUserId,
-      customerEmail: `discord-${input.discordUserId}@example.local`,
+      customerName: input.customerName || input.customerId,
+      customerEmail: `${input.platform || "discord"}-${input.customerId}@example.local`,
       idempotencyKey: `ORDER-${order.id}-${new Date().toISOString().slice(0, 10)}`,
     });
     const providerExpirationAt = parseExternalDate(
@@ -158,12 +184,19 @@ export async function markOrderPaid(
     }
 
     if (order.status === OrderStatus.PAID) {
-      return { action: "already_paid" as const, order };
+      return { action: "already_paid" as const, order, underpaid: false };
     }
 
-    if (order.status !== OrderStatus.PENDING) {
-      return { action: "ignored" as const, order };
+    if (order.status === OrderStatus.REFUNDED) {
+      return { action: "ignored" as const, order, underpaid: false };
     }
+
+    // Telat bayar (EXPIRED/CANCELLED/FAILED) tetap diterima: uang buyer sudah masuk.
+    const paidAmount =
+      payload?.amount !== undefined
+        ? parseMoney(payload.amount, order.subtotal)
+        : null;
+    const underpaid = paidAmount !== null && paidAmount < order.subtotal;
 
     await tx.order.update({
       where: { id: order.id },
@@ -172,6 +205,9 @@ export async function markOrderPaid(
         paidAt: parseExternalDate(payload?.paid_at) || new Date(),
         paymenkuTrxId: payload?.trx_id || order.paymenkuTrxId,
         paymenkuRawJson: payload?.rawJson || order.paymenkuRawJson,
+        deliveryError: underpaid
+          ? `Pembayaran kurang: ${paidAmount} < ${order.subtotal}`
+          : order.deliveryError,
         paymentAmount:
           payload?.amount !== undefined
             ? parseMoney(payload.amount, order.paymentAmount || order.subtotal)
@@ -212,21 +248,21 @@ export async function markOrderPaid(
       throw new Error("Order tidak ditemukan setelah update");
     }
 
-    return { action: "paid" as const, order: updatedOrder };
+    return { action: "paid" as const, order: updatedOrder, underpaid };
   });
 
   if (result.action === "ignored") {
     return result.order;
   }
 
+  if (result.action === "paid" && result.underpaid) {
+    return result.order;
+  }
+
   return deliverOrder(result.order.id);
 }
 
-export async function deliverOrder(
-  orderId: string,
-  client?: DiscordClient<true>,
-  options?: { force?: boolean },
-) {
+export async function deliverOrder(orderId: string, options?: { force?: boolean }) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -263,10 +299,8 @@ export async function deliverOrder(
     trxId: order.paymenkuTrxId || "",
   });
 
-  const run = async (activeClient: DiscordClient<true>) => {
-    await sendDirectMessage(activeClient, order.discordUserId, {
-      content: message,
-    });
+  const run = async () => {
+    await sendCustomerMessage(order.platform, order.discordUserId, message);
 
     let updated = await prisma.order.update({
       where: { id: order.id },
@@ -282,16 +316,13 @@ export async function deliverOrder(
     });
 
     if (!updated.buyAlertSentAt) {
-      await sendBuyAlert(
-        {
-          discordUserId: updated.discordUserId,
-          discordUsername:
-            updated.discordUsername || updated.discordUserId,
-          productName: updated.product.name,
-          quantity: updated.quantity,
-        },
-        activeClient,
-      ).catch(() => null);
+      await sendBuyAlert({
+        platform: updated.platform,
+        customerId: updated.discordUserId,
+        customerName: updated.discordUsername || updated.discordUserId,
+        productName: updated.product.name,
+        quantity: updated.quantity,
+      }).catch(() => null);
 
       updated = await prisma.order.update({
         where: { id: updated.id },
@@ -306,16 +337,12 @@ export async function deliverOrder(
       });
     }
 
-    await syncAutoOrderEmbed(activeClient).catch(() => null);
+    await syncAutoOrderEmbed().catch(() => null);
     return updated;
   };
 
   try {
-    if (client) {
-      return await run(client);
-    }
-
-    return await withDiscordClient(run, settings.bot.discordBotToken);
+    return await run();
   } catch (error) {
     await prisma.order.update({
       where: { id: order.id },
@@ -328,7 +355,7 @@ export async function deliverOrder(
 }
 
 export async function resendDelivery(orderId: string) {
-  return deliverOrder(orderId, undefined, { force: true });
+  return deliverOrder(orderId, { force: true });
 }
 
 export async function expireOrder(orderId: string) {
@@ -391,11 +418,16 @@ export async function markOrderTerminalStatus(
     throw new Error("Order tidak ditemukan");
   }
 
-  if (order.status === OrderStatus.PAID) {
+  if (order.status === OrderStatus.PAID && status !== OrderStatus.REFUNDED) {
     return order;
   }
 
   await releaseReservedStock(order.id);
+
+  if (status === OrderStatus.REFUNDED) {
+    await restockSoldItems(order.id, order.productId, order.quantity);
+  }
+
   const updatedOrder = await prisma.order.update({
     where: { id: order.id },
     data: {
@@ -421,21 +453,56 @@ async function ensureSoldStockLines(order: OrderWithRelations) {
   }
 
   await markReservedStockSold(order.id);
-  const soldStocks = await prisma.stockItem.findMany({
+
+  // Telat bayar setelah stok reserved dilepas: ambil ulang dari stok tersedia.
+  let soldStocks = await findSoldStocks(order.id);
+
+  if (soldStocks.length < order.quantity) {
+    const shortage = order.quantity - soldStocks.length;
+    await reserveStock(order.productId, shortage, order.id);
+    await markReservedStockSold(order.id);
+    soldStocks = await findSoldStocks(order.id);
+  }
+
+  if (soldStocks.length === 0) {
+    throw new Error("Tidak ada stok yang bisa dikirim untuk order ini");
+  }
+
+  return soldStocks.map((stock) => stock.content);
+}
+
+async function findSoldStocks(orderId: string) {
+  return prisma.stockItem.findMany({
     where: {
-      soldOrderId: order.id,
+      soldOrderId: orderId,
     },
     select: {
       content: true,
     },
     orderBy: { createdAt: "asc" },
   });
+}
 
-  if (soldStocks.length === 0) {
-    throw new Error("Tidak ada stok yang bisa dikirim untuk order ini");
+async function restockSoldItems(orderId: string, productId: string, quantity: number) {
+  const sold = await prisma.stockItem.findMany({
+    where: { soldOrderId: orderId, status: "SOLD" },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (sold.length === 0) {
+    return;
   }
 
-  return soldStocks.map((stock: { content: string }) => stock.content);
+  await prisma.stockItem.updateMany({
+    where: { soldOrderId: orderId, status: "SOLD" },
+    data: { status: "AVAILABLE", soldOrderId: null },
+  });
+
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  await prisma.product.update({
+    where: { id: productId },
+    data: { soldCount: Math.max(0, Number(product?.soldCount ?? quantity) - sold.length) },
+  });
 }
 
 function createReferenceId() {
@@ -505,9 +572,5 @@ async function notifyOrderExpired(order: PrismaOrder) {
     referenceId: order.referenceId,
   });
 
-  await withDiscordClient((client) =>
-    sendDirectMessage(client, order.discordUserId, {
-      content: message,
-    }),
-  );
+  await sendCustomerMessage(order.platform, order.discordUserId, message);
 }
