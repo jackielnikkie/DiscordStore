@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Settings, Package, ShoppingCart, CreditCard, Bot, MessageSquare, Type, Image, LogOut, LayoutDashboard, Send } from "lucide-react";
+import { Settings, Package, ShoppingCart, CreditCard, Bot, Type, Image, LogOut, LayoutDashboard } from "lucide-react";
 
 import { logoutAction } from "../app/admin/actions";
 import { requireAdminSession } from "../lib/auth";
 import { detectPaymenkuMode, getAllSettings } from "../lib/settings";
+import { BotSettingsMenu } from "./bot-settings-menu";
 import { StatusPill } from "./status-pill";
 import { LazyThemeToggle } from "@/components/ui/lazy-theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -32,8 +33,6 @@ const navItems = [
 ];
 
 const settingsItems = [
-  { href: "/admin/settings/bot", label: "Bot Settings", icon: Bot },
-  { href: "/admin/settings/telegram", label: "Telegram", icon: Send },
   { href: "/admin/settings/payment", label: "Payment Settings", icon: CreditCard },
   { href: "/admin/settings/text", label: "Text Templates", icon: Type },
   { href: "/admin/settings/embed", label: "Embed Settings", icon: Image },
@@ -103,6 +102,7 @@ export async function AppShell({ title, description, actions, children }: AppShe
             <SidebarGroupLabel>Settings</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <BotSettingsMenu />
                 {settingsItems.map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild>
