@@ -1,0 +1,43 @@
+name: discordstore
+
+services:
+  app:
+    image: ghcr.io/jackielnikkie/discordstore:latest
+    # Build lokal di VPS tanpa registry: ganti dengan `build: .`
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: file:./data/dev.db
+      NODE_ENV: production
+      TZ: Asia/Jakarta
+    volumes:
+      - app_data:/app/data
+    expose:
+      - "3000"
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  app_data:
+  caddy_data:
+  caddy_config:

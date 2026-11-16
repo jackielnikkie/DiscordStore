@@ -4,6 +4,8 @@ node_modules
 dev.db
 dev.db-shm
 dev.db-wal
+data
+backups
 .env
 .env.local
 .env.*.local

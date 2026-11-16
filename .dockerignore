@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.github
+dev.db
+dev.db-shm
+dev.db-wal
+data
+backups
+*.log
+.env
+.env.*
+!.env.example
+README.md
+docs

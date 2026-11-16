@@ -83,6 +83,17 @@ URL: `https://domain-kamu/api/webhooks/paymenku`
 
 Header yang diverifikasi: `X-Paymenku-Signature` (HMAC-SHA256 body+timestamp dengan webhook secret) dan `X-Paymenku-Timestamp`.
 
+## Deploy (Docker)
+
+`Dockerfile` + `docker-compose.yml` + `Caddyfile`. Satu container = web + worker, SQLite di named volume `app_data`, HTTPS otomatis via Caddy.
+
+```bash
+cp .env.example .env   # isi DOMAIN, ACME_EMAIL, SESSION_SECRET, ADMIN_PASSWORD_HASH
+docker compose pull && docker compose up -d
+```
+
+Image dibangun otomatis oleh GitHub Actions (`.github/workflows/docker.yml`) saat push ke `main` → `ghcr.io/jackielnikkie/discordstore:latest`. Panduan lengkap: [docs/deploy.md](docs/deploy.md).
+
 ## Cek cepat
 
 ```bash
