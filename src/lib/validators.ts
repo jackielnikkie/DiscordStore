@@ -112,6 +112,7 @@ export const paymentSettingsSchema = z.object({
     .regex(/^[a-z0-9_]*$/, "Channel code hanya huruf kecil, angka, dan underscore")
     .default("qris"),
   returnUrl: z.string().trim().url().optional().or(z.literal("")),
+  allowSandboxDelivery: stringToBoolean(false),
 });
 
 export const telegramSettingsSchema = z.object({

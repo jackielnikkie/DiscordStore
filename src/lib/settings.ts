@@ -20,6 +20,7 @@ export type PaymentSettings = {
   paymenkuWebhookSecret: string;
   paymenkuChannelCode: string;
   returnUrl: string;
+  allowSandboxDelivery: boolean;
 };
 
 export type TextSettings = {
@@ -77,6 +78,7 @@ const paymentDefaults: PaymentSettings = {
   returnUrl: process.env.NEXT_PUBLIC_APP_URL
     ? `${process.env.NEXT_PUBLIC_APP_URL}/order/success`
     : "http://localhost:3000/order/success",
+  allowSandboxDelivery: false,
 };
 
 const legacyBuyAlertTemplate = "@{{username}} Membeli {{quantity}} {{productName}} akun";
@@ -182,6 +184,10 @@ export async function getAllSettings(): Promise<AppSettings> {
       paymenkuChannelCode:
         map.get("paymenkuChannelCode") || paymentDefaults.paymenkuChannelCode,
       returnUrl: map.get("returnUrl") || paymentDefaults.returnUrl,
+      allowSandboxDelivery: parseBoolean(
+        map.get("allowSandboxDelivery"),
+        paymentDefaults.allowSandboxDelivery,
+      ),
     },
     text: {
       ...textDefaults,

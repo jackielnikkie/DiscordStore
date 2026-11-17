@@ -1,6 +1,7 @@
 import { AppShell } from "../../../../components/app-shell";
 import { Notice } from "../../../../components/notice";
 import { SavedState, StatusGrid, StatusTile, WarningList } from "../../../../components/settings-status";
+import { ToggleField } from "../../../../components/toggle-field";
 import { maskSecret, detectPaymenkuMode, getAllSettings, getWebhookUrl } from "../../../../lib/settings";
 import { formatRupiah } from "../../../../lib/money";
 import { listPaymenkuChannels, type PaymenkuChannel } from "../../../../lib/paymenku";
@@ -45,6 +46,11 @@ export default async function PaymentSettingsPage({
   }
   if (payment.returnUrl && !payment.returnUrl.startsWith("https://")) {
     warnings.push("Return URL sebaiknya HTTPS agar redirect setelah bayar tidak diblokir.");
+  }
+  if (payment.allowSandboxDelivery) {
+    warnings.push(
+      "Delivery untuk transaksi SANDBOX sedang diaktifkan — produk akan terkirim walau tidak ada dana nyata. Matikan sebelum produksi.",
+    );
   }
 
   return (
@@ -169,6 +175,19 @@ export default async function PaymentSettingsPage({
             <div className="grid gap-2 md:col-span-2">
               <Label htmlFor="webhookUrl">Webhook URL (set di dashboard Paymenku)</Label>
               <Input id="webhookUrl" name="webhookUrl" defaultValue={webhookUrl} readOnly />
+            </div>
+
+            <div className="grid gap-2 md:col-span-2">
+              <ToggleField
+                label="Izinkan delivery untuk transaksi sandbox (khusus testing)"
+                name="allowSandboxDelivery"
+                defaultChecked={payment.allowSandboxDelivery}
+              />
+              <p className="text-xs text-muted-foreground">
+                Default mati: transaksi sandbox ditandai PAID tanpa mengirim produk.
+                Nyalakan hanya saat uji end-to-end sandbox, lalu matikan lagi sebelum
+                produksi.
+              </p>
             </div>
 
             {selected ? (
