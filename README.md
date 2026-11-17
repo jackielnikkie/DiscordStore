@@ -87,7 +87,15 @@ Perintah buyer: `/start`, `/products`, `/history`. Deep link `t.me/<bot>?start=b
 
 URL: `https://domain-kamu/api/webhooks/paymenku`
 
-Header yang diverifikasi: `X-Paymenku-Signature` (HMAC-SHA256 body+timestamp dengan webhook secret) dan `X-Paymenku-Timestamp`.
+Header: `X-PaymenKu-Signature` = `HMAC-SHA256(timestamp + "." + raw_body, webhook_secret)` hex, dan `X-PaymenKu-Timestamp` (toleransi 5 menit). Webhook dibalas 2xx dulu, pemrosesan dijalankan setelah respons (`after()`), idempoten per `trx_id`/`reference_id`.
+
+Catatan perilaku sesuai dokumentasi Paymenku:
+
+- **Webhook = sumber status resmi.** Polling `/check-status` hanya rekonsiliasi (tiap 3 menit, maks 10 order, berhenti saat kena rate limit).
+- Transaksi **sandbox** (`is_sandbox`) ditandai `PAID` tapi **tidak** memicu delivery otomatis (`deliveryError` diisi).
+- Kanal, fee, dan batas nominal diambil dari `GET /payment-channels` (cache 10 menit), bukan ditanam di kode. Halaman Paymenku Settings menampilkan dropdown kanal aktif + detail fee/min/max.
+- Respons transaksi memakai envelope `status: "success" | "error"` dengan `amount` berupa string desimal; nominal divalidasi terhadap `min_amount`/`max_amount` kanal sebelum transaksi dibuat.
+- Instruksi pembayaran menyesuaikan tipe kanal: QRIS (`qr_url`/`qr_string`), VA (`bank` + `va_number`), e-wallet (`checkout_url`), gerai ritel (`store` + `payment_code`), plus `simulator_url` untuk sandbox.
 
 ## Deploy (Docker)
 

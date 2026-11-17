@@ -106,7 +106,11 @@ export const botSettingsSchema = z.object({
 export const paymentSettingsSchema = z.object({
   paymenkuApiKey: z.string().trim().optional().or(z.literal("")),
   paymenkuWebhookSecret: z.string().trim().optional().or(z.literal("")),
-  paymenkuChannelCode: z.string().trim().default("qris"),
+  paymenkuChannelCode: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9_]*$/, "Channel code hanya huruf kecil, angka, dan underscore")
+    .default("qris"),
   returnUrl: z.string().trim().url().optional().or(z.literal("")),
 });
 

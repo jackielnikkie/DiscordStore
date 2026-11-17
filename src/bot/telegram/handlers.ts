@@ -1,6 +1,7 @@
 import { OrderStatus } from "../../lib/db-types";
 import { prisma } from "../../lib/db";
 import { formatRupiah } from "../../lib/money";
+import { buildInstructionLines, readPaymentInstruction } from "../../lib/paymenku-instruction";
 import { parsePriceTiers } from "../../lib/pricing";
 import { renderTemplate } from "../../lib/templates";
 import { getAllSettings, getTelegramSettings, saveTelegramSettings } from "../../lib/settings";
@@ -322,7 +323,15 @@ async function createTelegramOrder(
       qrUrl: order.paymenkuQrUrl || "-",
       expirationDate: order.expiresAt || "-",
       referenceId: order.referenceId,
-    }).slice(0, 1024);
+    });
+
+    const instructionLines = buildInstructionLines(
+      readPaymentInstruction(order.paymenkuRawJson),
+    );
+    const body = (instructionLines.length > 0
+      ? `${caption}\n\n${instructionLines.join("\n")}`
+      : caption
+    ).slice(0, 1024);
 
     const keyboard: InlineKeyboard = [
       [{ text: "Cek Payment Status", callback_data: `checkpay:${order.id}` }],
@@ -333,11 +342,11 @@ async function createTelegramOrder(
     }
 
     if (order.paymenkuQrUrl) {
-      await sendTelegramPhoto(chatId, order.paymenkuQrUrl, caption, keyboard);
+      await sendTelegramPhoto(chatId, order.paymenkuQrUrl, body, keyboard);
       return;
     }
 
-    await sendTelegramMessage(chatId, caption, keyboard);
+    await sendTelegramMessage(chatId, body, keyboard);
   } catch (error) {
     await sendTelegramMessage(
       chatId,

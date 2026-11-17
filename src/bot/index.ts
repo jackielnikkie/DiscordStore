@@ -99,25 +99,33 @@ async function start() {
   }
 }
 
+/** Rekonsiliasi saja (docs Paymenku: webhook sumber status resmi, jangan polling agresif). */
 function startOrderPoller() {
   const tick = async () => {
     const pendingOrders = await prisma.order.findMany({
       where: {
         status: "PENDING",
       },
-      take: 20,
+      take: 10,
       orderBy: { createdAt: "asc" },
     });
 
     for (const order of pendingOrders) {
-      await checkOrderPaymentStatus(order.id).catch((error) => {
-        console.error(`[bot] cek status gagal untuk ${order.referenceId}`, error);
-      });
+      try {
+        await checkOrderPaymentStatus(order.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[bot] cek status gagal untuk ${order.referenceId}: ${message}`);
+
+        if (/rate limit/i.test(message)) {
+          break;
+        }
+      }
     }
   };
 
   void tick();
-  setInterval(() => void tick(), 60_000);
+  setInterval(() => void tick(), 180_000);
 }
 
 void start();

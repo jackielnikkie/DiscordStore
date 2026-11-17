@@ -17,6 +17,7 @@ import { sendDirectMessage } from "../../lib/discord";
 import { OrderStatus } from "../../lib/db-types";
 import { prisma } from "../../lib/db";
 import { formatRupiah } from "../../lib/money";
+import { buildInstructionLines, readPaymentInstruction } from "../../lib/paymenku-instruction";
 import { getAllSettings } from "../../lib/settings";
 import { checkOrderPaymentStatus } from "../../services/paymentService";
 import { createOrder } from "../../services/orderService";
@@ -211,6 +212,18 @@ async function sendInvoiceDm(
 
   if (order.paymenkuQrUrl) {
     embed.setImage(order.paymenkuQrUrl);
+  }
+
+  const instructionLines = buildInstructionLines(
+    readPaymentInstruction(order.paymenkuRawJson),
+  );
+
+  if (instructionLines.length > 0) {
+    embed.addFields({
+      name: "Instruksi Pembayaran",
+      value: instructionLines.join("\n").slice(0, 1024),
+      inline: false,
+    });
   }
 
   const paymentButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(

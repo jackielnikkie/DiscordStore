@@ -290,6 +290,18 @@ export async function deliverOrder(orderId: string, options?: { force?: boolean 
     return order;
   }
 
+  // Docs Paymenku: transaksi sandbox tidak boleh memicu pemenuhan pesanan sungguhan.
+  if (order.isSandbox) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        deliveryError: "Transaksi sandbox: delivery otomatis dilewati.",
+      },
+    });
+
+    return order;
+  }
+
   const settings = await getAllSettings();
   const stockLines = await ensureSoldStockLines(order);
   const message = renderTemplate(settings.text.dmPaymentSuccessText, {

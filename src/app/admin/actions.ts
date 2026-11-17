@@ -41,6 +41,10 @@ import { checkOrderPaymentStatus } from "../../services/paymentService";
 import { ensureUniqueSlug } from "../../services/productService";
 import { normalizePriceTiersJson } from "../../lib/pricing";
 import { testDiscordConnection } from "../../lib/discord";
+import {
+  clearPaymenkuCache,
+  listPaymenkuChannels,
+} from "../../lib/paymenku";
 
 export async function loginAction(formData: FormData) {
   const redirectTo = "/admin/login";
@@ -318,6 +322,7 @@ export async function savePaymentSettingsAction(formData: FormData) {
   try {
     const input = paymentSettingsSchema.parse(Object.fromEntries(formData));
     await savePaymentSettings(input, { preserveSecrets: true });
+    clearPaymenkuCache();
     const saved = await getPaymentSettings();
     revalidateEverywhere();
     redirectWithState(
@@ -502,17 +507,17 @@ export async function testPaymenkuAction(formData: FormData) {
   const redirectTo = getRedirectTarget(formData, "/admin/settings/payment");
 
   try {
+    const channels = await listPaymenkuChannels({ fresh: true });
     const settings = await getPaymentSettings();
     const mode = detectPaymenkuMode(settings.paymenkuApiKey);
-
-    if (mode === "unknown") {
-      throw new Error("API key Paymenku belum valid atau belum disimpan");
-    }
+    const current = channels.find(
+      (channel) => channel.code === settings.paymenkuChannelCode,
+    );
 
     redirectWithState(
       redirectTo,
       "message",
-      `Format API key valid. Mode terdeteksi: ${mode}.`,
+      `API key valid (${mode}). ${channels.length} kanal aktif${current ? `, kanal terpilih: ${current.name}` : ", kanal terpilih belum aktif"}.`,
     );
   } catch (error) {
     if (isRedirectError(error)) throw error;

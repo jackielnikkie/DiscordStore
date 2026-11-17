@@ -10,6 +10,10 @@ import {
   resolveUnitPrice,
 } from "../src/lib/pricing";
 import { slugify } from "../src/lib/slug";
+import {
+  buildInstructionLines,
+  parsePaymentInstruction,
+} from "../src/lib/paymenku-instruction";
 import { buildQtyKeyboard, parseRequiredChannels } from "../src/lib/telegram";
 import { buildCatalogKeyboard } from "../src/bot/telegram/catalog";
 
@@ -67,6 +71,17 @@ assert.deepEqual(parseRequiredChannels("@satu\n@sdua, -100123 ,,\n"), [
 ]);
 assert.deepEqual(parseRequiredChannels(""), []);
 assert.deepEqual(parseRequiredChannels(null), []);
+
+const qrisInfo = parsePaymentInstruction({ qr_url: "u", qr_string: "s" });
+assert.equal(qrisInfo.kind, "qris");
+const vaInfo = parsePaymentInstruction({ bank: "BCA", va_number: "1234567890" });
+assert.equal(vaInfo.kind, "va");
+assert.ok(buildInstructionLines(vaInfo).some((line) => line.includes("1234567890")));
+const cstoreInfo = parsePaymentInstruction({ store: "Alfamart", payment_code: "999" });
+assert.equal(cstoreInfo.kind, "cstore");
+assert.ok(buildInstructionLines(cstoreInfo).some((line) => line.includes("999")));
+assert.equal(parsePaymentInstruction({ checkout_url: "https://x" }).kind, "ewallet");
+assert.equal(parsePaymentInstruction(null).kind, "unknown");
 
 // migrasi kolom platform harus ada di DB lama maupun baru
 const order = await prisma.order.findMany({ take: 1 });
