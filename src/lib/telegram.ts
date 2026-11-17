@@ -131,6 +131,7 @@ export async function sendTelegramMessage(
   text: string,
   keyboard?: InlineKeyboard,
   token?: string,
+  parseMode?: "HTML",
 ) {
   return call<{ message_id: number }>(
     token || (await resolveTelegramToken()),
@@ -139,9 +140,43 @@ export async function sendTelegramMessage(
       chat_id: chatId,
       text,
       disable_web_page_preview: true,
+      ...(parseMode ? { parse_mode: parseMode } : {}),
       ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
     },
   );
+}
+
+export async function sendTelegramDocument(
+  chatId: number | string,
+  fileName: string,
+  content: string,
+  caption?: string,
+  token?: string,
+) {
+  const botToken = token || (await resolveTelegramToken());
+  const form = new FormData();
+
+  form.append("chat_id", String(chatId));
+  form.append("document", new Blob([content], { type: "text/plain" }), fileName);
+
+  if (caption) {
+    form.append("caption", caption.slice(0, 1024));
+  }
+
+  const response = await fetch(`${TELEGRAM_API}${botToken}/sendDocument`, {
+    method: "POST",
+    body: form,
+    cache: "no-store",
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  const json = (await response.json()) as TelegramResponse<{ message_id: number }>;
+
+  if (!json.ok) {
+    throw new Error(json.description || "Telegram sendDocument gagal");
+  }
+
+  return json.result as { message_id: number };
 }
 
 export async function editTelegramMessage(

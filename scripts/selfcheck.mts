@@ -11,6 +11,12 @@ import {
 } from "../src/lib/pricing";
 import { slugify } from "../src/lib/slug";
 import {
+  buildDeliveryFileName,
+  escapeHtml,
+  formatStockBlock,
+  renderDeliveryMessage,
+} from "../src/lib/delivery-format";
+import {
   buildInstructionLines,
   parsePaymentInstruction,
 } from "../src/lib/paymenku-instruction";
@@ -82,6 +88,22 @@ assert.equal(cstoreInfo.kind, "cstore");
 assert.ok(buildInstructionLines(cstoreInfo).some((line) => line.includes("999")));
 assert.equal(parsePaymentInstruction({ checkout_url: "https://x" }).kind, "ewallet");
 assert.equal(parsePaymentInstruction(null).kind, "unknown");
+
+assert.equal(escapeHtml('a<b>&"c"'), 'a&lt;b&gt;&amp;"c"');
+assert.equal(
+  formatStockBlock("telegram", ["a<b", "x"]),
+  "<code>a&lt;b</code>\n<code>x</code>",
+);
+assert.equal(formatStockBlock("discord", ["a", "b"]), "```\na\nb\n```");
+assert.equal(
+  renderDeliveryMessage("Data:\n{{stockLines}}", {}, "discord", ["k1"]),
+  "Data:\n```\nk1\n```",
+);
+assert.equal(
+  renderDeliveryMessage("Data:\n{{stockLines}}", {}, "telegram", ["k<1>"]),
+  "Data:\n<code>k&lt;1&gt;</code>",
+);
+assert.equal(buildDeliveryFileName("ORDER-20261117-123"), "order-ORDER-20261117-123.txt");
 
 // migrasi kolom platform harus ada di DB lama maupun baru
 const order = await prisma.order.findMany({ take: 1 });

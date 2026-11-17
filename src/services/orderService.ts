@@ -6,6 +6,11 @@ import {
 } from "../lib/db-types";
 import { sendBuyAlert } from "../bot/services/buyAlert";
 import { syncAutoOrderEmbed } from "../bot/services/embedSync";
+import {
+  buildDeliveryFileContent,
+  buildDeliveryFileName,
+  renderDeliveryMessage,
+} from "../lib/delivery-format";
 import { sendCustomerMessage } from "../lib/notify";
 import { formatRupiah, parseMoney } from "../lib/money";
 import { parsePriceTiers, resolveOrderTotal } from "../lib/pricing";
@@ -306,21 +311,36 @@ export async function deliverOrder(orderId: string, options?: { force?: boolean 
   }
 
   const stockLines = await ensureSoldStockLines(order);
-  const message = renderTemplate(settings.text.dmPaymentSuccessText, {
-    productName: order.product.name,
-    quantity: order.quantity,
-    price: formatRupiah(order.subtotal),
-    paymentAmount: formatRupiah(order.paymentAmount || order.subtotal),
-    payUrl: order.paymenkuPayUrl || "",
-    qrUrl: order.paymenkuQrUrl || "",
-    expirationDate: order.expiresAt || "",
-    stockLines: stockLines.join("\n"),
-    referenceId: order.referenceId,
-    trxId: order.paymenkuTrxId || "",
-  });
+  const messageLines =
+    stockLines.length > 40
+      ? [...stockLines.slice(0, 40), `… dan ${stockLines.length - 40} data lain (lihat file .txt)`]
+      : stockLines;
+  const message = renderDeliveryMessage(
+    settings.text.dmPaymentSuccessText,
+    {
+      productName: order.product.name,
+      quantity: order.quantity,
+      price: formatRupiah(order.subtotal),
+      paymentAmount: formatRupiah(order.paymentAmount || order.subtotal),
+      payUrl: order.paymenkuPayUrl || "",
+      qrUrl: order.paymenkuQrUrl || "",
+      expirationDate: order.expiresAt || "",
+      referenceId: order.referenceId,
+      trxId: order.paymenkuTrxId || "",
+    },
+    order.platform,
+    messageLines,
+  );
 
   const run = async () => {
-    await sendCustomerMessage(order.platform, order.discordUserId, message);
+    await sendCustomerMessage(order.platform, order.discordUserId, {
+      text: message,
+      parseMode: order.platform === "telegram" ? "HTML" : undefined,
+      file: {
+        name: buildDeliveryFileName(order.referenceId),
+        content: buildDeliveryFileContent(order.referenceId, stockLines),
+      },
+    });
 
     let updated = await prisma.order.update({
       where: { id: order.id },
