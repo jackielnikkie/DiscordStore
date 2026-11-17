@@ -84,25 +84,37 @@ const paymentDefaults: PaymentSettings = {
 const legacyBuyAlertTemplate = "@{{username}} Membeli {{quantity}} {{productName}} akun";
 const defaultBuyAlertTemplate = "{{user}} Membeli {{quantity}} {{productName}} akun";
 
+const defaultInvoiceTemplate = [
+  "Invoice {{referenceId}} dibuat.",
+  "",
+  "Produk: {{productName}}",
+  "Qty: {{quantity}}",
+  "Total bayar: {{paymentAmount}}",
+  "Status: Pending",
+  "Bayar sebelum: {{expirationDate}}",
+].join("\n");
+
+const legacyInvoiceTemplate = [
+  "Invoice berhasil dibuat.",
+  "",
+  "Produk: {{productName}}",
+  "Qty: {{quantity}}",
+  "Total bayar: {{paymentAmount}}",
+  "Status: Pending",
+  "",
+  "Bayar via QRIS:",
+  "{{payUrl}}",
+  "",
+  "QR Image:",
+  "{{qrUrl}}",
+  "",
+  "Invoice expired: {{expirationDate}}",
+].join("\n");
+
 const textDefaults: TextSettings = {
   dmTestText:
     "Test DM dari bot. Ini untuk memastikan kamu bisa menerima invoice dan produk otomatis.",
-  dmInvoiceText: [
-    "Invoice berhasil dibuat.",
-    "",
-    "Produk: {{productName}}",
-    "Qty: {{quantity}}",
-    "Total bayar: {{paymentAmount}}",
-    "Status: Pending",
-    "",
-    "Bayar via QRIS:",
-    "{{payUrl}}",
-    "",
-    "QR Image:",
-    "{{qrUrl}}",
-    "",
-    "Invoice expired: {{expirationDate}}",
-  ].join("\n"),
+  dmInvoiceText: defaultInvoiceTemplate,
   dmPaymentSuccessText: [
     "Pembayaran berhasil.",
     "",
@@ -192,7 +204,9 @@ export async function getAllSettings(): Promise<AppSettings> {
     text: {
       ...textDefaults,
       dmTestText: map.get("dmTestText") || textDefaults.dmTestText,
-      dmInvoiceText: map.get("dmInvoiceText") || textDefaults.dmInvoiceText,
+      dmInvoiceText:
+        normalizeInvoiceTemplate(map.get("dmInvoiceText")) ||
+        textDefaults.dmInvoiceText,
       dmPaymentSuccessText:
         map.get("dmPaymentSuccessText") || textDefaults.dmPaymentSuccessText,
       dmExpiredText: map.get("dmExpiredText") || textDefaults.dmExpiredText,
@@ -327,6 +341,14 @@ export function detectPaymenkuMode(apiKey: string) {
 export function getWebhookUrl() {
   const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   return `${base.replace(/\/$/, "")}/api/webhooks/paymenku`;
+}
+
+function normalizeInvoiceTemplate(template?: string) {
+  if (!template) {
+    return "";
+  }
+
+  return template === legacyInvoiceTemplate ? defaultInvoiceTemplate : template;
 }
 
 function normalizeBuyAlertTemplate(template?: string) {

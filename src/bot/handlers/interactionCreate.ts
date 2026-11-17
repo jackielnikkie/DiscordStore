@@ -216,6 +216,7 @@ async function sendInvoiceDm(
 
   const instructionLines = buildInstructionLines(
     readPaymentInstruction(order.paymenkuRawJson),
+    { includeQrUrl: false },
   );
 
   if (instructionLines.length > 0) {

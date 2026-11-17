@@ -3,6 +3,7 @@ import { prisma } from "../../lib/db";
 import { formatRupiah } from "../../lib/money";
 import { buildInstructionLines, readPaymentInstruction } from "../../lib/paymenku-instruction";
 import { parsePriceTiers } from "../../lib/pricing";
+import { escapeHtml } from "../../lib/delivery-format";
 import { renderTemplate } from "../../lib/templates";
 import { getAllSettings, getTelegramSettings, saveTelegramSettings } from "../../lib/settings";
 import {
@@ -17,7 +18,7 @@ import {
   type TelegramUpdate,
 } from "../../lib/telegram";
 import { checkOrderPaymentStatus } from "../../services/paymentService";
-import { createOrder } from "../../services/orderService";
+import { createOrder, deliverOrder } from "../../services/orderService";
 import { getProductById, listProductsWithStock } from "../../services/productService";
 import { buildCatalogKeyboard, buildCatalogText } from "./catalog";
 
@@ -314,24 +315,9 @@ async function createTelegramOrder(
       quantity,
     });
 
+    const instruction = readPaymentInstruction(order.paymenkuRawJson);
     const settings = await getAllSettings();
-    const caption = renderTemplate(settings.text.dmInvoiceText, {
-      productName: order.product.name,
-      quantity: order.quantity,
-      paymentAmount: formatRupiah(order.paymentAmount || order.subtotal),
-      payUrl: order.paymenkuPayUrl || "-",
-      qrUrl: order.paymenkuQrUrl || "-",
-      expirationDate: order.expiresAt || "-",
-      referenceId: order.referenceId,
-    });
-
-    const instructionLines = buildInstructionLines(
-      readPaymentInstruction(order.paymenkuRawJson),
-    );
-    const body = (instructionLines.length > 0
-      ? `${caption}\n\n${instructionLines.join("\n")}`
-      : caption
-    ).slice(0, 1024);
+    const body = buildInvoiceCaption(order, instruction, settings.text.dmInvoiceText);
 
     const keyboard: InlineKeyboard = [
       [{ text: "Cek Payment Status", callback_data: `checkpay:${order.id}` }],
@@ -342,17 +328,66 @@ async function createTelegramOrder(
     }
 
     if (order.paymenkuQrUrl) {
-      await sendTelegramPhoto(chatId, order.paymenkuQrUrl, body, keyboard);
+      await sendTelegramPhoto(chatId, order.paymenkuQrUrl, body, keyboard, undefined, "HTML");
       return;
     }
 
-    await sendTelegramMessage(chatId, body, keyboard);
+    await sendTelegramMessage(chatId, body, keyboard, undefined, "HTML");
   } catch (error) {
     await sendTelegramMessage(
       chatId,
       error instanceof Error ? error.message : "Gagal membuat invoice order",
     );
   }
+}
+
+function buildInvoiceCaption(
+  order: Awaited<ReturnType<typeof createOrder>>,
+  instruction: ReturnType<typeof readPaymentInstruction>,
+  template: string,
+) {
+  const header = escapeHtml(
+    renderTemplate(template, {
+      referenceId: order.referenceId,
+      productName: order.product.name,
+      quantity: order.quantity,
+      paymentAmount: formatRupiah(order.paymentAmount || order.subtotal),
+      expirationDate: formatLocalDate(order.expiresAt),
+      payUrl: order.paymenkuPayUrl || "-",
+      qrUrl: order.paymenkuQrUrl || "-",
+    }),
+  );
+
+  const lines = [header];
+
+  const instructionLines = buildInstructionLines(instruction, {
+    includeQrUrl: false,
+    codeFormat: "html",
+  });
+
+  if (instructionLines.length > 0) {
+    lines.push("", ...instructionLines);
+  }
+
+  return lines.join("\n").slice(0, 1024);
+}
+
+function formatLocalDate(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Jakarta",
+  }).format(parsed);
 }
 
 async function replyPaymentStatus(chatId: number, telegramUserId: number, orderId: string) {
@@ -364,18 +399,57 @@ async function replyPaymentStatus(chatId: number, telegramUserId: number, orderI
       return;
     }
 
-    const latest =
-      order.status === OrderStatus.PENDING
-        ? await checkOrderPaymentStatus(order.id)
-        : order;
+    if (order.status === OrderStatus.PENDING) {
+      await checkOrderPaymentStatus(order.id).catch(() => null);
+    }
 
-    await sendTelegramMessage(chatId, describeStatus(latest.status));
+    let latest = await prisma.order.findUnique({ where: { id: orderId } });
+
+    // Self-heal: pembayaran sudah masuk tapi delivery belum sempat jalan.
+    if (
+      latest?.status === OrderStatus.PAID &&
+      !latest.deliveredAt &&
+      !latest.deliveryError
+    ) {
+      await deliverOrder(latest.id).catch(() => null);
+      latest = (await prisma.order.findUnique({ where: { id: orderId } })) ?? latest;
+    }
+
+    await sendTelegramMessage(chatId, describeOrderState(latest), undefined, undefined, "HTML");
   } catch (error) {
     await sendTelegramMessage(
       chatId,
       error instanceof Error ? error.message : "Gagal cek status payment.",
     );
   }
+}
+
+function describeOrderState(order: {
+  status: string;
+  isSandbox?: boolean | null;
+  deliveredAt?: string | null;
+  deliveryError?: string | null;
+}) {
+  if (order.status === OrderStatus.PAID) {
+    if (order.deliveredAt) {
+      return "Pembayaran terverifikasi. Produk sudah dikirim di chat ini.";
+    }
+
+    if (order.deliveryError) {
+      return [
+        "Pembayaran terverifikasi, tapi pengiriman otomatis belum berhasil:",
+        `<code>${escapeHtml(order.deliveryError)}</code>`,
+        "",
+        "Admin akan memproses manual. Simpan nomor invoice kamu.",
+      ].join("\n");
+    }
+
+    return order.isSandbox
+      ? "Pembayaran sandbox terverifikasi. Delivery otomatis dilewati di mode sandbox."
+      : "Pembayaran terverifikasi. Produk sedang disiapkan, tunggu beberapa saat.";
+  }
+
+  return describeStatus(order.status);
 }
 
 function describeStatus(status: string) {

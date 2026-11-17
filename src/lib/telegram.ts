@@ -205,6 +205,7 @@ export async function sendTelegramPhoto(
   caption: string,
   keyboard?: InlineKeyboard,
   token?: string,
+  parseMode?: "HTML",
 ) {
   return call<{ message_id: number }>(
     token || (await resolveTelegramToken()),
@@ -213,6 +214,7 @@ export async function sendTelegramPhoto(
       chat_id: chatId,
       photo: photoUrl,
       caption,
+      ...(parseMode ? { parse_mode: parseMode } : {}),
       ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
     },
   );

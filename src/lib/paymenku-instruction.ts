@@ -73,17 +73,24 @@ export function readPaymentInstruction(rawJson?: string | null): PaymentInstruct
   }
 }
 
-export function buildInstructionLines(instruction: PaymentInstruction) {
+export function buildInstructionLines(
+  instruction: PaymentInstruction,
+  options?: { includeQrUrl?: boolean; codeFormat?: "html" | "none" },
+) {
+  const wrap =
+    options?.codeFormat === "html"
+      ? (value: string) => `<code>${escapeHtml(value)}</code>`
+      : (value: string) => value;
   const lines: string[] = [];
 
   if (instruction.kind === "va" && instruction.vaNumber) {
     lines.push(`Transfer ${instruction.bank || "Virtual Account"}`);
-    lines.push(`Nomor VA: ${instruction.vaNumber}`);
+    lines.push(`Nomor VA: ${wrap(instruction.vaNumber)}`);
   }
 
   if (instruction.kind === "cstore" && instruction.paymentCode) {
     lines.push(`Bayar di ${instruction.store || "gerai ritel"}`);
-    lines.push(`Kode bayar: ${instruction.paymentCode}`);
+    lines.push(`Kode bayar: ${wrap(instruction.paymentCode)}`);
   }
 
   if (instruction.kind === "ewallet" && instruction.checkoutUrl) {
@@ -91,18 +98,22 @@ export function buildInstructionLines(instruction: PaymentInstruction) {
   }
 
   if (instruction.kind === "qris") {
-    if (instruction.qrUrl) {
+    if (instruction.qrUrl && options?.includeQrUrl !== false) {
       lines.push(`QRIS: ${instruction.qrUrl}`);
     }
 
     if (instruction.qrString) {
-      lines.push(`QR string: ${instruction.qrString}`);
+      lines.push(`QR string: ${wrap(instruction.qrString)}`);
     }
   }
 
   if (instruction.simulatorUrl) {
-    lines.push(`Simulator sandbox: ${instruction.simulatorUrl}`);
+    lines.push(`Simulator sandbox: ${wrap(instruction.simulatorUrl)}`);
   }
 
   return lines;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
