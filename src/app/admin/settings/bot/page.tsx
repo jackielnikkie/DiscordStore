@@ -2,6 +2,8 @@ import { AppShell } from "../../../../components/app-shell";
 import { Notice } from "../../../../components/notice";
 import { ToggleField } from "../../../../components/toggle-field";
 import { maskSecret, getAllSettings } from "../../../../lib/settings";
+import { SavedState, StatusGrid, StatusTile, WarningList } from "../../../../components/settings-status";
+import { formatRelativeTime, isFresh } from "../../../../lib/status";
 import {
   saveBotSettingsAction,
   saveTextSettingsAction,
@@ -20,6 +22,47 @@ export default async function BotSettingsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [params, settings] = await Promise.all([searchParams, getAllSettings()]);
+  const bot = settings.bot;
+  const hasToken = Boolean(bot.discordBotToken);
+  const stateLabel = (bot.botReadyState || "offline").split(":")[0];
+  const online = stateLabel.startsWith("online") && isFresh(bot.botLastHeartbeatAt, 90_000);
+  const botTone: "success" | "warning" | "neutral" = online
+    ? "success"
+    : hasToken && stateLabel.startsWith("offline")
+      ? "warning"
+      : "neutral";
+
+  const embedValue = !hasToken
+    ? "Bot belum aktif"
+    : bot.autoOrderChannelId
+      ? "Siap"
+      : "Channel belum diatur";
+  const embedTone: "success" | "warning" | "neutral" = !hasToken
+    ? "neutral"
+    : bot.autoOrderChannelId
+      ? "success"
+      : "warning";
+
+  const alertReady = bot.enableBuyAlert && Boolean(bot.buyAlertChannelId);
+  const alertTone: "success" | "warning" | "neutral" = alertReady
+    ? "success"
+    : bot.enableBuyAlert
+      ? "warning"
+      : "neutral";
+
+  const warnings: string[] = [];
+  if (!hasToken) {
+    warnings.push("Token bot Discord belum diisi — worker Discord idle.");
+  }
+  if (hasToken && !bot.autoOrderChannelId) {
+    warnings.push("Channel auto-order belum diatur — embed katalog tidak akan muncul.");
+  }
+  if (hasToken && bot.enableBuyAlert && !bot.buyAlertChannelId) {
+    warnings.push("Buy alert aktif tapi channel buy alert kosong.");
+  }
+  if (hasToken && bot.enableAutoSyncEmbed && !bot.autoOrderChannelId) {
+    warnings.push("Auto sync embed aktif tapi channel auto-order kosong.");
+  }
 
   return (
     <AppShell
@@ -30,6 +73,42 @@ export default async function BotSettingsPage({
         message={typeof params.message === "string" ? params.message : undefined}
         error={typeof params.error === "string" ? params.error : undefined}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ringkasan Status</CardTitle>
+          <CardDescription>Kondisi worker Discord dan kanal saat ini.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <StatusGrid>
+            <StatusTile
+              label="Bot Discord"
+              value={stateLabel}
+              tone={botTone}
+              hint={`heartbeat ${formatRelativeTime(bot.botLastHeartbeatAt)}`}
+            />
+            <StatusTile
+              label="Token Bot"
+              value={hasToken ? "Tersimpan" : "Belum diisi"}
+              tone={hasToken ? "success" : "neutral"}
+              hint={hasToken ? maskSecret(bot.discordBotToken) : undefined}
+            />
+            <StatusTile
+              label="Embed Auto-Order"
+              value={embedValue}
+              tone={embedTone}
+              hint={`sync ${bot.enableAutoSyncEmbed ? "aktif" : "nonaktif"}`}
+            />
+            <StatusTile
+              label="Buy Alert"
+              value={bot.buyAlertChannelId || "belum diatur"}
+              tone={alertTone}
+              hint={bot.enableBuyAlert ? "alert aktif" : "alert nonaktif"}
+            />
+          </StatusGrid>
+          <WarningList items={warnings} />
+        </CardContent>
+      </Card>
 
       <form
         id="bot-settings-form"
@@ -42,7 +121,17 @@ export default async function BotSettingsPage({
           <CardHeader><CardTitle>Bot Configuration</CardTitle></CardHeader>
           <CardContent className="grid gap-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Discord Bot Token" name="discordBotToken" defaultValue="" placeholder={settings.bot.discordBotToken ? maskSecret(settings.bot.discordBotToken) : ""} />
+              <Field
+                label="Discord Bot Token"
+                name="discordBotToken"
+                defaultValue=""
+                placeholder={bot.discordBotToken ? maskSecret(bot.discordBotToken) : ""}
+              >
+                <SavedState saved={hasToken} masked={hasToken ? maskSecret(bot.discordBotToken) : undefined} />
+                <p className="text-xs text-muted-foreground">
+                  Kosongkan field untuk mempertahankan token yang tersimpan.
+                </p>
+              </Field>
               <Field label="Client ID" name="discordClientId" defaultValue={settings.bot.discordClientId} />
               <Field label="Guild ID" name="discordGuildId" defaultValue={settings.bot.discordGuildId} />
               <Field label="Auto-Order Channel ID" name="autoOrderChannelId" defaultValue={settings.bot.autoOrderChannelId} />
@@ -53,6 +142,9 @@ export default async function BotSettingsPage({
               <ToggleField label="Enable buy alert" name="enableBuyAlert" defaultChecked={settings.bot.enableBuyAlert} />
               <ToggleField label="Enable auto sync embed" name="enableAutoSyncEmbed" defaultChecked={settings.bot.enableAutoSyncEmbed} />
             </div>
+            <p className="text-xs text-muted-foreground">
+              Perubahan toggle langsung dipakai worker dalam ±20 detik.
+            </p>
           </CardContent>
         </Card>
 
@@ -115,11 +207,12 @@ export default async function BotSettingsPage({
   );
 }
 
-function Field({ label, name, defaultValue, placeholder }: { label: string; name: string; defaultValue?: string; placeholder?: string }) {
+function Field({ label, name, defaultValue, placeholder, children }: { label: string; name: string; defaultValue?: string; placeholder?: string; children?: React.ReactNode }) {
   return (
     <div className="grid gap-2">
       <Label htmlFor={name}>{label}</Label>
       <Input id={name} name={name} defaultValue={defaultValue} placeholder={placeholder} />
+      {children}
     </div>
   );
 }
