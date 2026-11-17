@@ -37,10 +37,14 @@ async function buildStoreEmbeds() {
     listProductsWithStock(),
   ]);
 
+  const footerText = settings.bot.ownerDiscord
+    ? `${settings.text.embedFooter} • @${settings.bot.ownerDiscord}`
+    : settings.text.embedFooter;
+
   const overview = new EmbedBuilder()
     .setTitle(settings.text.embedTitle)
     .setDescription(settings.text.embedDescription)
-    .setFooter({ text: settings.text.embedFooter });
+    .setFooter({ text: footerText });
 
   const productEmbeds = products.slice(0, 9).map((product: ProductWithStock) => {
     const stockLabel =

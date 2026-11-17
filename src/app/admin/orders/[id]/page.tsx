@@ -1,4 +1,4 @@
-import type { StockItem } from "../../../../lib/db-types";
+import { OrderStatus, type StockItem } from "../../../../lib/db-types";
 
 import { notFound } from "next/navigation";
 
@@ -8,7 +8,7 @@ import { StatusPill } from "../../../../components/status-pill";
 import { prisma } from "../../../../lib/db";
 import { formatDate, formatOrderAmount, getOrderTone } from "../../../../lib/order-presenter";
 import { formatRupiah } from "../../../../lib/money";
-import { cancelOrderAction, checkPaymentAction, markPaidAction, resendOrderAction } from "../../actions";
+import { cancelOrderAction, checkPaymentAction, markPaidAction, resendOrderAction } from "../../order-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,11 @@ export default async function OrderDetailPage({
 
   const stockLines = order.soldStocks.length > 0 ? order.soldStocks : order.reservedStocks;
   const hasPayment = !!(order.paymenkuTrxId || order.paymenkuPayUrl);
+  const redirectTo = `/admin/orders/${order.id}`;
+  const canResend = order.status === OrderStatus.PAID;
+  const canMarkPaid =
+    order.status !== OrderStatus.PAID && order.status !== OrderStatus.REFUNDED;
+  const canCancel = order.status === OrderStatus.PENDING;
 
   return (
     <AppShell
@@ -70,10 +75,54 @@ export default async function OrderDetailPage({
         <Card>
           <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
           <CardContent className="space-y-3 p-4">
-            <form action={resendOrderAction}><input type="hidden" name="orderId" value={order.id}/><input type="hidden" name="redirectTo" value={`/admin/orders/${order.id}`}/><Button type="submit" className="w-full">Resend DM Delivery</Button></form>
-            <form action={checkPaymentAction}><input type="hidden" name="orderId" value={order.id}/><input type="hidden" name="redirectTo" value={`/admin/orders/${order.id}`}/><Button variant="secondary" type="submit" className="w-full">Check Payment Status</Button></form>
-            <form action={markPaidAction}><input type="hidden" name="orderId" value={order.id}/><input type="hidden" name="redirectTo" value={`/admin/orders/${order.id}`}/><Button variant="secondary" type="submit" className="w-full">Mark Paid Manual</Button></form>
-            <form action={cancelOrderAction}><input type="hidden" name="orderId" value={order.id}/><input type="hidden" name="redirectTo" value={`/admin/orders/${order.id}`}/><Button variant="destructive" type="submit" className="w-full">Cancel Order</Button></form>
+            {order.deliveryError ? (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+                <p className="font-semibold">Delivery error</p>
+                <p className="break-words">{order.deliveryError}</p>
+                {/sandbox/i.test(order.deliveryError) ? (
+                  <p className="mt-1">
+                    Transaksi sandbox: delivery hanya berjalan bila toggle &quot;Izinkan delivery
+                    transaksi sandbox&quot; aktif di Paymenku Settings.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            <ActionButton
+              action={resendOrderAction}
+              orderId={order.id}
+              redirectTo={redirectTo}
+              label="Resend DM Delivery"
+              enabled={canResend}
+              hint="Hanya untuk order berstatus PAID."
+            />
+            <ActionButton
+              action={checkPaymentAction}
+              orderId={order.id}
+              redirectTo={redirectTo}
+              label="Check Payment Status"
+              variant="secondary"
+              enabled
+              hint="Tarik status terbaru dari provider."
+            />
+            <ActionButton
+              action={markPaidAction}
+              orderId={order.id}
+              redirectTo={redirectTo}
+              label="Mark Paid Manual"
+              variant="secondary"
+              enabled={canMarkPaid}
+              hint="Order sudah PAID/REFUNDED."
+            />
+            <ActionButton
+              action={cancelOrderAction}
+              orderId={order.id}
+              redirectTo={redirectTo}
+              label="Cancel Order"
+              variant="destructive"
+              enabled={canCancel}
+              hint="Hanya order berstatus PENDING."
+            />
           </CardContent>
         </Card>
       </div>
@@ -129,5 +178,44 @@ export default async function OrderDetailPage({
         </CardContent>
       </Card>
     </AppShell>
+  );
+}
+
+function ActionButton({
+  action,
+  orderId,
+  redirectTo,
+  label,
+  variant = "default",
+  enabled,
+  hint,
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  orderId: string;
+  redirectTo: string;
+  label: string;
+  variant?: "default" | "secondary" | "destructive";
+  enabled: boolean;
+  hint: string;
+}) {
+  if (!enabled) {
+    return (
+      <div className="space-y-1">
+        <Button type="button" disabled variant={variant} className="w-full" title={hint}>
+          {label}
+        </Button>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+    );
+  }
+
+  return (
+    <form action={action}>
+      <input type="hidden" name="orderId" value={orderId} />
+      <input type="hidden" name="redirectTo" value={redirectTo} />
+      <Button type="submit" variant={variant} className="w-full">
+        {label}
+      </Button>
+    </form>
   );
 }

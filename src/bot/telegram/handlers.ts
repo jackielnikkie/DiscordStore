@@ -134,7 +134,11 @@ async function showCatalog(chatId: number) {
 
   await sendTelegramMessage(
     chatId,
-    buildCatalogText(active, settings.telegram.telegramCatalogTitle || settings.text.embedTitle),
+    buildCatalogText(
+      active,
+      settings.telegram.telegramCatalogTitle || settings.text.embedTitle,
+      settings.bot.ownerDiscord,
+    ),
     buildCatalogKeyboard(active),
   );
 }

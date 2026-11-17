@@ -10,6 +10,7 @@ import {
   resolveUnitPrice,
 } from "../src/lib/pricing";
 import { slugify } from "../src/lib/slug";
+import { maskStockContent, parseStockIds } from "../src/lib/stock-mask";
 import {
   buildDeliveryFileName,
   escapeHtml,
@@ -104,6 +105,11 @@ assert.equal(
   "Data:\n<code>k&lt;1&gt;</code>",
 );
 assert.equal(buildDeliveryFileName("ORDER-20261117-123"), "order-ORDER-20261117-123.txt");
+
+assert.equal(maskStockContent("abcdefgh"), "ab••••gh");
+assert.equal(maskStockContent("abcd"), "••••");
+assert.equal(parseStockIds("a, b\nc,, a").join(","), "a,b,c");
+assert.equal(parseStockIds("   ").length, 0);
 
 // migrasi kolom platform harus ada di DB lama maupun baru
 const order = await prisma.order.findMany({ take: 1 });

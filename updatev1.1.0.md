@@ -1,49 +1,52 @@
-# Update v1.1.0 — Stock table: multi-select + masking
+# Update v1.1.0 — Stock multi-select, masking, order actions, owner store
 
-Status: plan disetujui (siap diimplementasi)
+Status: **implemented & deployed** (versi `1.1.0`, tampil di sidebar: `Admin Panel · v1.1.0`)
 
-## Keputusan final
-1. **Masking server-side** — HTML tidak memuat isi asli; reveal lewat API ber-auth.
-2. **Hapus massal hanya untuk `AVAILABLE`**; `RESERVED`/`SOLD` dilewati dan dilaporkan.
-   Hapus per baris tetap boleh semua status (aksi eksplisit satu baris), pakai konfirmasi.
-3. **Filter status wajib** (Available / Reserved / Sold / Semua) + pagination 50.
-   Pencarian teks **tidak** masuk v1.1.0.
+## 1. Stock table (Kelola Stok)
+- Checkbox per baris + checkbox header (select-all halaman, indeterminate saat sebagian).
+- Toolbar `{n} dipilih` → **Hapus terpilih** / Batalkan; konfirmasi menyebut "hanya stok AVAILABLE yang dihapus".
+- **Pilih semua hasil filter** (`all=1`) menghapus semua `AVAILABLE` yang cocok filter.
+- Hapus massal hanya `AVAILABLE`; `RESERVED`/`SOLD` dilewati dan dilaporkan (`x dihapus, y dilewati`).
+- Filter status (AVAILABLE / RESERVED / SOLD / semua) + pagination 50 baris.
+- Masking **server-side**: HTML hanya berisi `ab••••gh`; isi asli diambil via `POST /api/admin/stock/reveal` (auth admin + same-origin, maks 100 id).
+- Tombol mata per baris, **Tampilkan semua**, **Sembunyikan semua**, dan copy per baris (aktif setelah terlihat).
 
-## 1. Multi-select + bulk delete
-- Checkbox per baris, checkbox header = select-all baris di halaman (indeterminate saat sebagian).
-- Toolbar saat ada pilihan: `{n} dipilih` · **Hapus terpilih** · **Batalkan**.
-- Tombol **Pilih semua hasil filter** → submit `all=1` + filter aktif; server menghapus semua `AVAILABLE` yang cocok filter.
-- Hasil: notice `x dihapus, y dilewati (reserved/sold)`.
-- Konfirmasi menyebut jumlah + peringatan "hanya stok AVAILABLE yang dihapus".
-- Pagination: `page` (default 1), `perPage` 50; filter `status` dipertahankan di link pagination.
+## 2. Tombol aksi order (detail order)
+| Tombol | Aktif saat | Perilaku |
+|---|---|---|
+| Resend DM Delivery | `PAID` | hasil nyata: `delivered`, `already_delivered`, `sandbox_blocked` (pesan: aktifkan toggle sandbox delivery) |
+| Check Payment Status | semua | re-cek Paymenku; kalau `PAID` & belum terkirim → coba kirim ulang otomatis |
+| Mark Paid Manual | bukan `PAID`/`REFUNDED` | status yang tidak berubah dilaporkan ("status tidak berubah") |
+| Cancel Order | `PENDING` | best-effort `POST /transaction/cancel` ke Paymenku, lalu lokal `CANCELLED` + stok dilepas |
 
-## 2. Masking server-side
-- `src/lib/stock-mask.ts`: `maskStockContent(content)` → `ab••••yz` (sisakan 2 karakter awal/akhir, tengah `•`) dan `parseStockIds(raw)`.
-- Server render: tabel hanya berisi hasil masking.
-- Reveal: `POST /api/admin/stock/reveal` body `{ ids: string[] }` (maks 100 id) → `{ items: { id, content }[] }`, wajib sesi admin + same-origin.
-- UI: tombol mata per baris (batch/individual), **Tampilkan semua** (batch id yang sedang tampil), **Sembunyikan semua**, tombol copy per baris (aktif setelah terlihat).
-- Baris yang belum di-reveal tetap masked setelah reload (tidak ada cache isi di server).
+Tombol non-aktif tidak menghilang, hanya disabled + hint alasan. `deliveryError` ditampilkan di kotak amber.
 
-## 3. File yang disentuh
-| File | Perubahan |
-|---|---|
-| `src/components/stock-table.tsx` (baru) | checkbox, toolbar, masking state, copy, link filter/pagination |
-| `src/app/admin/products/[id]/stock/page.tsx` | query filter+page, render `StockTable`, tampilkan notice |
-| `src/app/admin/actions.ts` | `deleteStockBulkAction` (hanya AVAILABLE + mode `all`), `deleteStockAction` tetap |
-| `src/app/api/admin/stock/reveal/route.ts` (baru) | batch reveal, auth admin |
-| `src/lib/stock-mask.ts` (baru) | masking + parser id |
-| `scripts/selfcheck.mts` | assert masking, parse id, whitelist filter status |
+Refund **tidak** diimplementasi (kanal QRIS tidak didukung API refund Paymenku).
 
-Tanpa perubahan schema DB.
+## 3. Auto-cancel 10 menit
+- Timeout tidak dibayar → status **`CANCELLED`** (bukan `EXPIRED`), stok `RESERVED` → `AVAILABLE`, `soldCount` tidak berubah, buyer dapat DM.
+- Pemicu: worker poller tiap 3 menit, webhook `expired` Paymenku, atau cek status manual. Efektif ±10–13 menit.
 
-## Kriteria selesai
-- Select-all header bekerja, indeterminate benar, pilihan hilang setelah aksi.
-- Bulk delete hanya menghapus AVAILABLE; jumlah dihapus/dilewati akurat; filter tidak berubah setelah aksi.
-- HTML tabel tidak mengandung isi asli (cek `curl` halaman = masked).
-- Reveal/copy berfungsi, UI kembali masked saat disembunyikan.
-- `tsc --noEmit`, `npm run build`, `npx tsx scripts/selfcheck.mts` hijau; deploy via Actions + `compose pull`.
+## 4. Owner store
+- Setting `ownerDiscord` (tanpa `@`) di Bot → Discord, validasi `^[a-z0-9._]{2,32}$`.
+- Katalog Telegram: baris kedua `by @owner`; footer embed Discord: `... • @owner`.
+- Kosong = disembunyikan.
 
-## Catatan risiko
-- Reveal endpoint = jalur baca isi stok; hanya untuk sesi admin, batasi jumlah id per request.
-- `all=1` wajib memakai filter yang sama dengan tampilan; kalau tidak, baris tak terlihat bisa terhapus (mitigasi: hitung dulu + konfirmasi jumlah).
-- SOLD tidak bisa dihapus massal untuk menjaga audit order; refund/cancel tetap jalur resmi.
+## 5. Buy alert + total
+- Default template: `{{user}} Membeli {{quantity}} {{productName}} akun — {{total}}`
+- `{{total}}` = Rupiah (`paymentAmount || subtotal`), contoh `yiestera Membeli 1 API Key CoralBricks 3$ akun — Rp 2.000`
+- Template default lama otomatis dimigrasi; template custom tidak disentuh.
+
+## 6. Versi aplikasi
+- `src/lib/brand.ts`: `APP_VERSION = "1.1.0"` → tampil di sidebar `Admin Panel · v1.1.0`.
+- Bump manual tiap rilis.
+
+## 7. Keamanan (audit + hardening)
+- Security headers + CSP admin, `Cache-Control: no-store`, HSTS di Caddy.
+- `middleware.ts` fast-reject untuk `/admin*` & `/api/admin*` tanpa cookie sesi.
+- Login timing-safe (dummy bcrypt compare) + pesan gagal generik (anti enumerasi).
+- Same-origin API divalidasi `Origin`+`Referer`.
+- Laporan lengkap: `docs/security-audit-v1.1.0.md`.
+
+## Verifikasi rilis
+`npx tsc --noEmit` bersih · `npm run build` sukses · `npx tsx scripts/selfcheck.mts` ok · deploy GHCR + `docker compose pull`.

@@ -8,6 +8,12 @@ import { markOrderPaid, markOrderTerminalStatus } from "../../../../services/ord
 const MAX_WEBHOOK_BODY_BYTES = 32 * 1024;
 
 export async function POST(request: NextRequest) {
+  const declaredSize = Number(request.headers.get("content-length") || 0);
+
+  if (declaredSize > MAX_WEBHOOK_BODY_BYTES) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  }
+
   const rawBody = await request.text();
   const bodySize = Buffer.byteLength(rawBody, "utf8");
   const signature = request.headers.get("x-paymenku-signature") || "";
@@ -90,6 +96,7 @@ async function processPayload(payload: Record<string, unknown> | null) {
   }
 
   if (status === "expired") {
+    // Owner rule: expired → CANCELLED (routing ada di markOrderTerminalStatus).
     await markOrderTerminalStatus(referenceId, OrderStatus.EXPIRED, updatePayload);
     return;
   }

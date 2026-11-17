@@ -231,6 +231,28 @@ export default async function BotSettingsPage({
 
         <Button type="submit">Save Embed</Button>
       </form>
+
+      <form id="owner-discord-form" action={saveBotSettingsAction} className="space-y-6">
+        <input type="hidden" name="redirectTo" value="/admin/settings/bot" />
+        <input type="hidden" name="enableBuyAlert" value={String(bot.enableBuyAlert)} />
+        <input type="hidden" name="enableAutoSyncEmbed" value={String(bot.enableAutoSyncEmbed)} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Owner Discord</CardTitle>
+            <CardDescription>Kredit pemilik toko.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <Label htmlFor="ownerDiscord">Owner Discord (tanpa @)</Label>
+            <Input id="ownerDiscord" name="ownerDiscord" defaultValue={bot.ownerDiscord} placeholder="username" />
+            <p className="text-xs text-muted-foreground">
+              Tampil di katalog Telegram & footer embed Discord.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Button type="submit">Save Owner</Button>
+      </form>
     </AppShell>
   );
 }

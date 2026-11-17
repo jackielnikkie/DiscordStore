@@ -2,14 +2,18 @@ import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/notice";
-import { StatusPill } from "@/components/status-pill";
-import type { StockStatus } from "@/lib/db-types";
-import { formatDate, getStockTone } from "@/lib/order-presenter";
+import { StockTable, type StockTableRow } from "@/components/stock-table";
+import { maskStockContent } from "@/lib/stock-mask";
+import { prisma } from "@/lib/db";
+import { formatDate } from "@/lib/order-presenter";
 import { getProductById } from "@/services/productService";
-import { addStockAction, deleteStockAction, importStockAction } from "../../../actions";
+import { addStockAction, importStockAction } from "../../../actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+
+const ALLOWED_STATUSES = ["AVAILABLE", "RESERVED", "SOLD"];
+const PER_PAGE = 50;
 
 export default async function ProductStockPage({
   params,
@@ -24,6 +28,47 @@ export default async function ProductStockPage({
   if (!product) {
     notFound();
   }
+
+  const statusParam = typeof query.status === "string" ? query.status : "";
+  const statusFilter = ALLOWED_STATUSES.includes(statusParam) ? statusParam : "";
+
+  const pageParam = Number(typeof query.page === "string" ? query.page : "1");
+  const requestedPage =
+    Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
+
+  const where: Record<string, string> = { productId: product.id };
+  if (statusFilter) {
+    where.status = statusFilter;
+  }
+
+  // shim has no `skip`; fetch all matching, slice in memory for total + page.
+  const allStocks = await prisma.stockItem.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+  });
+
+  const total = allStocks.length;
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const page = Math.min(requestedPage, totalPages);
+  const pageStocks = allStocks.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  const stocks: StockTableRow[] = pageStocks.map(
+    (stock: {
+      id: string;
+      content: string;
+      status: string;
+      reservedBy: string | null;
+      soldOrderId: string | null;
+      createdAt: string;
+    }) => ({
+      id: stock.id,
+      content: maskStockContent(stock.content),
+      status: stock.status,
+      reservedBy: stock.reservedBy,
+      soldOrderId: stock.soldOrderId,
+      createdAt: formatDate(stock.createdAt),
+    }),
+  );
 
   return (
     <AppShell
@@ -61,46 +106,14 @@ export default async function ProductStockPage({
         </Card>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50">
-            <tr>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Content</th>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Status</th>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Reserved By</th>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Sold Order</th>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Created</th>
-              <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {(product.stocks || []).map((stock) => (
-              <tr key={stock.id} className="transition-colors hover:bg-muted/20">
-                <td className="p-4 align-middle font-mono text-xs leading-relaxed break-all">
-                  {stock.content}
-                </td>
-                <td className="p-4 align-middle">
-                  <StatusPill label={stock.status} tone={getStockTone(stock.status as StockStatus)} />
-                </td>
-                <td className="p-4 align-middle font-mono text-xs text-muted-foreground break-all">
-                  {stock.reservedBy || "-"}
-                </td>
-                <td className="p-4 align-middle font-mono text-xs text-muted-foreground break-all">
-                  {stock.soldOrderId || "-"}
-                </td>
-                <td className="p-4 align-middle">{formatDate(stock.createdAt)}</td>
-                <td className="p-4 align-middle">
-                  <form action={deleteStockAction}>
-                    <input type="hidden" name="stockId" value={stock.id} />
-                    <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}/stock`} />
-                    <Button variant="destructive" size="sm">Hapus</Button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <StockTable
+        productId={product.id}
+        stocks={stocks}
+        total={total}
+        page={page}
+        perPage={PER_PAGE}
+        statusFilter={statusFilter}
+      />
     </AppShell>
   );
 }

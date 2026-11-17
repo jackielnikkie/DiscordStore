@@ -3,7 +3,7 @@ import { Settings, Package, ShoppingCart, CreditCard, Bot, LogOut, LayoutDashboa
 
 import { logoutAction } from "../app/admin/actions";
 import { requireAdminSession } from "../lib/auth";
-import { STORE_NAME } from "../lib/brand";
+import { STORE_NAME, APP_VERSION } from "../lib/brand";
 import { detectPaymenkuMode, getAllSettings } from "../lib/settings";
 import { isFresh } from "../lib/status";
 import { SettingsGroupMenu } from "./settings-group-menu";
@@ -71,7 +71,7 @@ export async function AppShell({ title, description, actions, children }: AppShe
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">{STORE_NAME}</span>
-                    <span className="truncate text-xs">Admin Panel</span>
+                    <span className="truncate text-xs">Admin Panel · v{APP_VERSION}</span>
                   </div>
                 </a>
               </SidebarMenuButton>

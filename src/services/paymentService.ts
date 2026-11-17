@@ -4,10 +4,38 @@ import { prisma } from "../lib/db";
 import { checkPaymenkuStatus } from "../lib/paymenku";
 import {
   cancelOrder,
+  deliverOrder,
   expireOrder,
   markOrderPaid,
   markOrderTerminalStatus,
+  type DeliveryOutcome,
 } from "./orderService";
+
+/**
+ * Self-heal: order PAID tapi belum terkirim dan tanpa deliveryError.
+ * Dipakai admin (C) supaya aksi tidak mengklaim sukses palsu.
+ */
+export async function ensureOrderDelivered(
+  orderId: string,
+): Promise<DeliveryOutcome | null> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error("Order tidak ditemukan");
+  }
+
+  if (
+    order.status !== OrderStatus.PAID ||
+    order.deliveredAt ||
+    order.deliveryError
+  ) {
+    return null;
+  }
+
+  return deliverOrder(orderId);
+}
 
 /** Rekonsiliasi saja — webhook tetap sumber status resmi (docs Paymenku). */
 export async function checkOrderPaymentStatus(orderId: string) {
@@ -45,7 +73,7 @@ export async function checkOrderPaymentStatus(orderId: string) {
   }
 
   if (status === "expired") {
-    return expireOrder(order.id);
+    return cancelOrder(order.id);
   }
 
   if (status === "failed") {

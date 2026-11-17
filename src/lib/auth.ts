@@ -7,6 +7,11 @@ import { prisma } from "./db";
 
 const SESSION_COOKIE = "discordstore_admin";
 const SESSION_DURATION_DAYS = 7;
+// Cost-12 bcrypt hash of a throwaway string. Used to burn the same CPU time when
+// the username is wrong or no hash is configured, so response timing cannot be
+// used to enumerate valid usernames.
+const DUMMY_PASSWORD_HASH =
+  "$2b$12$T5Gm3sOu7TrDh7joqb0age57C5WfNDE/tvB/AEnuYAN8kumtCihT2";
 export const ADMIN_PASSWORD_MIN_LENGTH = 8;
 const ADMIN_PASSWORD_HASH_SETTING_KEY = "env__admin_password_hash";
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -105,18 +110,18 @@ export async function loginAdmin(
 
   const validUsername = username === getAdminUsername();
   const storedHash = await getAdminPasswordHash();
-  const validPassword = storedHash ? compareSync(password, storedHash) : false;
 
-  if (!storedHash) {
-    registerLoginFailure(username, ipAddress);
-    return {
-      success: false as const,
-      message: "Password admin belum dikonfigurasi. Set ADMIN_PASSWORD_HASH terlebih dahulu.",
-    };
-  }
+  // Always run a cost-12 bcrypt compare against a real hash (the stored one when
+  // everything lines up, otherwise the dummy) so the failure path costs the same
+  // as the success path — no timing leak of username existence or config state.
+  const hashToCheck = validUsername && storedHash ? storedHash : DUMMY_PASSWORD_HASH;
+  const validPassword =
+    validUsername && Boolean(storedHash) && compareSync(password, hashToCheck);
 
-  if (!validUsername || !validPassword) {
+  if (!validPassword) {
     registerLoginFailure(username, ipAddress);
+    // Single generic message for every failure mode (wrong user, wrong password,
+    // or unconfigured hash) to avoid account/config enumeration.
     return { success: false as const, message: "Username atau password salah" };
   }
 

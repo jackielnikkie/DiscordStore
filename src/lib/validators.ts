@@ -99,6 +99,20 @@ export const botSettingsSchema = z.object({
   autoOrderChannelId: z.string().trim().optional().or(z.literal("")),
   buyAlertChannelId: z.string().trim().optional().or(z.literal("")),
   adminRoleId: z.string().trim().optional().or(z.literal("")),
+  ownerDiscord: z.preprocess(
+    (value) =>
+      typeof value === "string"
+        ? value.trim().replace(/^@+/, "").toLowerCase()
+        : value,
+    z
+      .string()
+      .regex(
+        /^[a-z0-9._]{2,32}$/,
+        "Owner Discord hanya huruf kecil, angka, titik, dan underscore",
+      )
+      .optional()
+      .or(z.literal("")),
+  ),
   enableBuyAlert: stringToBoolean(false),
   enableAutoSyncEmbed: stringToBoolean(false),
 });

@@ -14,7 +14,10 @@ import {
 import { sendCustomerMessage } from "../lib/notify";
 import { formatRupiah, parseMoney } from "../lib/money";
 import { parsePriceTiers, resolveOrderTotal } from "../lib/pricing";
-import { createPaymenkuTransaction } from "../lib/paymenku";
+import {
+  cancelPaymenkuTransaction,
+  createPaymenkuTransaction,
+} from "../lib/paymenku";
 import { getAllSettings, requestEmbedSync } from "../lib/settings";
 import { renderTemplate } from "../lib/templates";
 import { prisma } from "../lib/db";
@@ -46,10 +49,16 @@ type PaymentUpdatePayload = {
   rawJson?: string;
 };
 
-type OrderWithRelations = PrismaOrder & {
+export type OrderWithRelations = PrismaOrder & {
   product: Product;
   soldStocks: Array<{ content: string }>;
   reservedStocks: Array<{ content: string }>;
+};
+
+export type DeliveryOutcome = {
+  delivered: boolean;
+  reason: "delivered" | "already_delivered" | "sandbox_blocked";
+  order: OrderWithRelations;
 };
 
 const ORDER_EXPIRY_MINUTES = 10;
@@ -270,10 +279,15 @@ export async function markOrderPaid(
     return result.order;
   }
 
-  return deliverOrder(result.order.id);
+  // Admin/lama hanya butuh order; outcome asli tersedia via deliverOrder/resendDelivery.
+  const outcome = await deliverOrder(result.order.id);
+  return outcome.order;
 }
 
-export async function deliverOrder(orderId: string, options?: { force?: boolean }) {
+export async function deliverOrder(
+  orderId: string,
+  options?: { force?: boolean },
+): Promise<DeliveryOutcome> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -292,7 +306,7 @@ export async function deliverOrder(orderId: string, options?: { force?: boolean 
   }
 
   if (order.deliveredAt && !options?.force) {
-    return order;
+    return { delivered: true, reason: "already_delivered", order };
   }
 
   // Docs Paymenku: transaksi sandbox tidak boleh memicu pemenuhan pesanan sungguhan,
@@ -300,14 +314,19 @@ export async function deliverOrder(orderId: string, options?: { force?: boolean 
   const settings = await getAllSettings();
 
   if (order.isSandbox && !settings.payment.allowSandboxDelivery) {
-    await prisma.order.update({
+    const blocked = await prisma.order.update({
       where: { id: order.id },
       data: {
         deliveryError: "Transaksi sandbox: delivery otomatis dilewati.",
       },
+      include: {
+        product: true,
+        soldStocks: { select: { content: true } },
+        reservedStocks: { select: { content: true } },
+      },
     });
 
-    return order;
+    return { delivered: false, reason: "sandbox_blocked", order: blocked };
   }
 
   const stockLines = await ensureSoldStockLines(order);
@@ -362,6 +381,7 @@ export async function deliverOrder(orderId: string, options?: { force?: boolean 
         customerName: updated.discordUsername || updated.discordUserId,
         productName: updated.product.name,
         quantity: updated.quantity,
+        amount: updated.paymentAmount || updated.subtotal,
       }).catch(() => null);
 
       updated = await prisma.order.update({
@@ -382,7 +402,8 @@ export async function deliverOrder(orderId: string, options?: { force?: boolean 
   };
 
   try {
-    return await run();
+    const updated = await run();
+    return { delivered: true, reason: "delivered", order: updated };
   } catch (error) {
     await prisma.order.update({
       where: { id: order.id },
@@ -394,7 +415,7 @@ export async function deliverOrder(orderId: string, options?: { force?: boolean 
   }
 }
 
-export async function resendDelivery(orderId: string) {
+export async function resendDelivery(orderId: string): Promise<DeliveryOutcome> {
   return deliverOrder(orderId, { force: true });
 }
 
@@ -403,6 +424,7 @@ export async function expireOrder(orderId: string) {
     where: { id: orderId },
   });
 
+  // Idempotent: hanya PENDING yang boleh time-out.
   if (!order || order.status !== OrderStatus.PENDING) {
     return order;
   }
@@ -411,7 +433,8 @@ export async function expireOrder(orderId: string) {
   const updatedOrder = await prisma.order.update({
     where: { id: order.id },
     data: {
-      status: OrderStatus.EXPIRED,
+      status: OrderStatus.CANCELLED,
+      // soldCount sengaja tidak disentuh: stok kembali AVAILABLE, angka penjualan tetap.
     },
   });
 
@@ -433,7 +456,15 @@ export async function cancelOrder(orderId: string) {
     throw new Error("Order yang sudah dibayar tidak bisa dibatalkan manual");
   }
 
-  await releaseReservedStock(order.id);
+  // Best-effort: transaksi provider dibatalkan, tapi kegagalan tidak menghalangi cancel lokal.
+  if (order.status === OrderStatus.PENDING && order.paymenkuTrxId) {
+    await cancelPaymenkuTransaction(order.paymenkuTrxId).catch(() => null);
+  }
+
+  if (order.status !== OrderStatus.REFUNDED) {
+    await releaseReservedStock(order.id);
+  }
+
   const updatedOrder = await prisma.order.update({
     where: { id: order.id },
     data: {
@@ -460,6 +491,11 @@ export async function markOrderTerminalStatus(
 
   if (order.status === OrderStatus.PAID && status !== OrderStatus.REFUNDED) {
     return order;
+  }
+
+  // Owner rule v1.1.0: expired = CANCELLED (bukan EXPIRED), stok dilepas.
+  if (status === OrderStatus.EXPIRED) {
+    return cancelOrder(order.id);
   }
 
   await releaseReservedStock(order.id);

@@ -13,6 +13,7 @@ export type BotSettings = {
   embedSyncRequestedAt: string;
   botReadyState: string;
   botLastHeartbeatAt: string;
+  ownerDiscord: string;
 };
 
 export type PaymentSettings = {
@@ -69,6 +70,7 @@ const botDefaults: BotSettings = {
   embedSyncRequestedAt: "",
   botReadyState: "offline",
   botLastHeartbeatAt: "",
+  ownerDiscord: normalizeDiscordHandle(process.env.OWNER_DISCORD || ""),
 };
 
 const paymentDefaults: PaymentSettings = {
@@ -82,7 +84,8 @@ const paymentDefaults: PaymentSettings = {
 };
 
 const legacyBuyAlertTemplate = "@{{username}} Membeli {{quantity}} {{productName}} akun";
-const defaultBuyAlertTemplate = "{{user}} Membeli {{quantity}} {{productName}} akun";
+const previousBuyAlertTemplate = "{{user}} Membeli {{quantity}} {{productName}} akun";
+const defaultBuyAlertTemplate = "{{user}} Membeli {{quantity}} {{productName}} akun — {{total}}";
 
 const defaultInvoiceTemplate = [
   "Invoice {{referenceId}} dibuat.",
@@ -187,6 +190,9 @@ export async function getAllSettings(): Promise<AppSettings> {
       botReadyState: map.get("botReadyState") || botDefaults.botReadyState,
       botLastHeartbeatAt:
         map.get("botLastHeartbeatAt") || botDefaults.botLastHeartbeatAt,
+      ownerDiscord: normalizeDiscordHandle(
+        map.get("ownerDiscord") || botDefaults.ownerDiscord,
+      ),
     },
     payment: {
       ...paymentDefaults,
@@ -356,11 +362,15 @@ function normalizeBuyAlertTemplate(template?: string) {
     return "";
   }
 
-  if (template === legacyBuyAlertTemplate) {
+  if (template === legacyBuyAlertTemplate || template === previousBuyAlertTemplate) {
     return defaultBuyAlertTemplate;
   }
 
   return template.replace(/@\{\{\s*username\s*\}\}/g, "{{user}}");
+}
+
+function normalizeDiscordHandle(value: string) {
+  return value.trim().replace(/^@+/, "").toLowerCase();
 }
 
 export function maskSecret(value: string, visible = 4) {
@@ -421,6 +431,10 @@ function normalizePartialSettings<T extends Record<string, string | boolean>>(
     for (const key of [...botKeys, ...paymentKeys, ...telegramKeys]) {
       const typedKey = key as keyof T;
       const value = next[typedKey];
+
+      if (typedKey === "ownerDiscord") {
+        continue;
+      }
 
       if (typeof value === "string" && value.trim() === "") {
         next[typedKey] = current[typedKey];

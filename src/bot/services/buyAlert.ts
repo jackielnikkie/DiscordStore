@@ -4,6 +4,7 @@ import { sendTextChannelMessage, withDiscordClient } from "../../lib/discord";
 import { renderTemplate } from "../../lib/templates";
 import { getAllSettings } from "../../lib/settings";
 import { sendTelegramAdminAlert } from "../../lib/notify";
+import { formatRupiah } from "../../lib/money";
 
 type ReadyClient = Client<true>;
 
@@ -13,6 +14,7 @@ type AlertPayload = {
   customerName: string;
   productName: string;
   quantity: number;
+  amount?: number;
 };
 
 export async function sendBuyAlert(payload: AlertPayload, client?: ReadyClient) {
@@ -25,6 +27,8 @@ export async function sendBuyAlert(payload: AlertPayload, client?: ReadyClient) 
     username: payload.customerName || payload.customerId,
     productName: payload.productName,
     quantity: payload.quantity,
+    // ponytail: empty string when amount absent, so template "— {{total}}" collapses to just "— ". Upgrade: strip trailing separator if the template ever needs cleaner output.
+    total: payload.amount === undefined ? "" : formatRupiah(payload.amount),
   });
 
   const results: boolean[] = [];
@@ -33,6 +37,8 @@ export async function sendBuyAlert(payload: AlertPayload, client?: ReadyClient) 
     const run = async (activeClient: ReadyClient) => {
       await sendTextChannelMessage(activeClient, settings.bot.buyAlertChannelId, {
         content,
+        // Username buyer tidak boleh memicu @everyone/@here.
+        allowedMentions: { parse: [] },
       });
     };
 

@@ -53,7 +53,7 @@ Panel admin: `http://localhost:3000/admin`.
 2. Order dibuat `PENDING`, stok di-reserve, invoice QRIS dikirim ke chat buyer.
 3. Pembayaran masuk via webhook `POST /api/webhooks/paymenku` (signature HMAC + timestamp 5 menit) atau polling tiap 60 detik.
 4. Order `PAID` → stok jadi `SOLD` → data produk dikirim ke chat buyer (tiap baris dalam blok sekali-tap-copy: `<code>` di Telegram, code fence di Discord) + lampiran `order-<reference>.txt` → buy alert ke channel admin.
-5. Order lewat masa berlaku → `EXPIRED`, stok dilepas. Pembayaran telat tetap diterima; kalau stok habis, order `PAID` dengan `deliveryError` untuk ditangani admin.
+5. Order lewat masa berlaku (10 menit) → `CANCELLED`, stok `AVAILABLE` lagi, buyer dapat DM. Pembayaran telat tetap diterima; kalau stok habis, order `PAID` dengan `deliveryError` untuk ditangani admin.
 
 ## Setup Discord
 

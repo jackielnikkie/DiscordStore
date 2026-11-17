@@ -1,7 +1,12 @@
 import crypto from "node:crypto";
 
-const sessionSecret =
-  process.env.SESSION_SECRET?.trim() || crypto.randomBytes(32).toString("hex");
+const sessionSecretFromEnv = process.env.SESSION_SECRET?.trim();
+
+if (!sessionSecretFromEnv && process.env.NODE_ENV === "production") {
+  throw new Error("SESSION_SECRET wajib diisi di production");
+}
+
+const sessionSecret = sessionSecretFromEnv || crypto.randomBytes(32).toString("hex");
 
 export function randomToken(size = 48) {
   return crypto.randomBytes(size).toString("hex");

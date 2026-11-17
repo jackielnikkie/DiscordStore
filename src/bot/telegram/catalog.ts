@@ -2,8 +2,19 @@ import { formatRupiah } from "../../lib/money";
 import type { InlineKeyboard } from "../../lib/telegram";
 import type { ProductWithStock } from "../../services/productService";
 
-export function buildCatalogText(products: ProductWithStock[], title: string) {
-  const lines = [title, ""];
+export function buildCatalogText(
+  products: ProductWithStock[],
+  title: string,
+  owner?: string,
+) {
+  const lines = [title];
+  const handle = (owner || "").trim().replace(/^@+/, "");
+
+  if (handle) {
+    lines.push(`by @${handle}`);
+  }
+
+  lines.push("");
 
   for (const product of products) {
     const stock =
