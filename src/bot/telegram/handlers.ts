@@ -56,7 +56,15 @@ async function handleMyChatMember(
       update.chat.id,
       current === detected
         ? "Bot terhubung. Channel ini dipakai sebagai channel log store."
-        : `Bot terhubung. Channel log store tetap yang sudah diatur (${current}). Ganti manual di panel kalau mau pakai channel ini.`,
+        : `Bot terhubung. Channel log store tetap yang sudah diatur (${current}). Kalau mau pakai channel ini, tekan tombol di bawah — hanya admin channel yang bisa mengubah.`,
+      [
+        [
+          {
+            text: "Pakai channel ini sebagai log",
+            callback_data: `setlog:${detected}`,
+          },
+        ],
+      ],
     ).catch(() => null);
     return;
   }
@@ -199,6 +207,40 @@ async function handleCallback(callback: NonNullable<TelegramUpdate["callback_que
 
   if (!chatId) {
     await answerCallbackQuery(callback.id).catch(() => null);
+    return;
+  }
+
+  if (data.startsWith("setlog:")) {
+    const channelId = data.slice("setlog:".length);
+    const settings = await getTelegramSettings();
+
+    try {
+      const member = await getTelegramChatMember(
+        channelId,
+        callback.from.id,
+        settings.telegramBotToken,
+      );
+
+      if (!["creator", "administrator"].includes(member.status)) {
+        await answerCallbackQuery(
+          callback.id,
+          "Hanya admin channel yang bisa mengubah channel log.",
+        ).catch(() => null);
+        return;
+      }
+
+      await saveTelegramSettings({ telegramAdminChannelId: channelId });
+      await answerCallbackQuery(callback.id, "Channel log diperbarui.").catch(() => null);
+      await sendTelegramMessage(
+        chatId,
+        "Channel log store sekarang memakai channel ini. Buy alert akan masuk ke sini.",
+      ).catch(() => null);
+    } catch {
+      await answerCallbackQuery(callback.id, "Gagal memverifikasi admin channel.").catch(
+        () => null,
+      );
+    }
+
     return;
   }
 
