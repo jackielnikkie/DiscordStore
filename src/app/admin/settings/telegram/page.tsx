@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 export default async function TelegramSettingsPage({
@@ -33,18 +34,22 @@ export default async function TelegramSettingsPage({
   const heartbeat = formatRelativeTime(telegram.telegramLastHeartbeatAt);
   const forceJoinActive = telegram.telegramForceJoinEnabled;
   const forceJoinChannel = telegram.telegramForceJoinChannel;
+  const forceJoinChannels = forceJoinChannel
+    .split(/[\s,]+/)
+    .map((channel) => channel.trim())
+    .filter(Boolean);
 
   const warnings: string[] = [];
 
   if (telegram.telegramEnabled && !hasToken) {
     warnings.push("Bot Telegram aktif tapi token belum diisi.");
   }
-  if (forceJoinActive && !forceJoinChannel) {
+  if (forceJoinActive && forceJoinChannels.length === 0) {
     warnings.push(
       "Gate join aktif tapi channel wajib join belum diisi — katalog akan terbuka untuk semua orang.",
     );
   }
-  if (forceJoinActive && forceJoinChannel && !hasToken) {
+  if (forceJoinActive && forceJoinChannels.length > 0 && !hasToken) {
     warnings.push("Gate join butuh token bot untuk cek membership.");
   }
   if (!telegram.telegramAdminChannelId) {
@@ -95,13 +100,21 @@ export default async function TelegramSettingsPage({
               label="Gate Join"
               value={
                 forceJoinActive
-                  ? `Aktif: ${forceJoinChannel || "-"}`
+                  ? `Aktif: ${forceJoinChannels.length} channel`
                   : "Nonaktif"
               }
               tone={
-                forceJoinActive ? (forceJoinChannel ? "success" : "warning") : "neutral"
+                forceJoinActive
+                  ? forceJoinChannels.length > 0
+                    ? "success"
+                    : "warning"
+                  : "neutral"
               }
-              hint={forceJoinActive ? undefined : "katalog terbuka untuk semua"}
+              hint={
+                forceJoinActive
+                  ? forceJoinChannels.join(", ") || "channel belum diisi"
+                  : "katalog terbuka untuk semua"
+              }
             />
           </StatusGrid>
           <WarningList items={warnings} />
@@ -173,19 +186,30 @@ export default async function TelegramSettingsPage({
             <CardTitle>Katalog &amp; Gate Join</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               <Field
                 label="Judul Katalog Telegram"
                 name="telegramCatalogTitle"
                 defaultValue={telegram.telegramCatalogTitle}
                 placeholder="Toko Akun Digital"
               />
-              <Field
-                label="Channel Wajib Join (@username atau -100...)"
-                name="telegramForceJoinChannel"
-                defaultValue={telegram.telegramForceJoinChannel}
-                placeholder="@lapakloka atau -1001234567890"
-              />
+              <div className="grid gap-2">
+                <Label htmlFor="telegramForceJoinChannel">
+                  Channel Wajib Join (@username atau -100...)
+                </Label>
+                <Textarea
+                  id="telegramForceJoinChannel"
+                  name="telegramForceJoinChannel"
+                  rows={3}
+                  defaultValue={telegram.telegramForceJoinChannel}
+                  placeholder={"@lapakloka\n@lapakloka_store\n-1001234567890"}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Bisa lebih dari satu — satu per baris (atau pisah koma). Buyer harus
+                  join <span className="font-medium">semua</span> channel yang terdaftar.
+                  Bot harus admin di tiap channel agar bisa cek membership.
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-6">
               <ToggleField

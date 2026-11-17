@@ -9,6 +9,7 @@ import {
   buildQtyKeyboard,
   exportTelegramInviteLink,
   getTelegramChatMember,
+  parseRequiredChannels,
   sendTelegramMessage,
   sendTelegramPhoto,
   type InlineKeyboard,
@@ -334,61 +335,79 @@ const MEMBERSHIP_TTL_MS = 5 * 60 * 1000;
 const membershipCache = new Map<string, number>();
 const inviteLinkCache = new Map<string, string>();
 
+function checkStatusAllowsAccess(status: string) {
+  return ["creator", "administrator", "member"].includes(status);
+}
+
 /** Gate join channel: true kalau boleh lanjut ke katalog. */
 async function ensureJoined(chatId: number, userId: number) {
   const settings = await getTelegramSettings();
+  const channels = parseRequiredChannels(settings.telegramForceJoinChannel);
 
   if (
     !settings.telegramForceJoinEnabled ||
-    !settings.telegramForceJoinChannel ||
+    channels.length === 0 ||
     !settings.telegramBotToken
   ) {
     return true;
   }
 
-  const channel = settings.telegramForceJoinChannel;
-  const key = `${channel}:${userId}`;
-  const cachedUntil = membershipCache.get(key);
+  const missing: string[] = [];
 
-  if (cachedUntil && cachedUntil > Date.now()) {
-    return true;
-  }
+  for (const channel of channels) {
+    const key = `${channel}:${userId}`;
+    const cachedUntil = membershipCache.get(key);
 
-  try {
-    const member = await getTelegramChatMember(
-      channel,
-      userId,
-      settings.telegramBotToken,
-    );
-
-    if (["creator", "administrator", "member"].includes(member.status)) {
-      membershipCache.set(key, Date.now() + MEMBERSHIP_TTL_MS);
-      return true;
+    if (cachedUntil && cachedUntil > Date.now()) {
+      continue;
     }
-  } catch (error) {
-    console.error(
-      "[telegram] cek membership gagal",
-      error instanceof Error ? error.message : error,
-    );
 
-    // Fail-open: salah konfigurasi channel jangan sampai memblokir penjualan.
+    try {
+      const member = await getTelegramChatMember(
+        channel,
+        userId,
+        settings.telegramBotToken,
+      );
+
+      if (checkStatusAllowsAccess(member.status)) {
+        membershipCache.set(key, Date.now() + MEMBERSHIP_TTL_MS);
+        continue;
+      }
+
+      missing.push(channel);
+    } catch (error) {
+      console.error(
+        `[telegram] cek membership ${channel} gagal`,
+        error instanceof Error ? error.message : error,
+      );
+      // Fail-open: salah konfigurasi channel jangan sampai memblokir penjualan.
+    }
+  }
+
+  if (missing.length === 0) {
     return true;
   }
 
-  await sendJoinPrompt(chatId, channel, settings.telegramBotToken);
+  await sendJoinPrompt(chatId, missing, settings.telegramBotToken);
   return false;
 }
 
-async function sendJoinPrompt(chatId: number, channel: string, token: string) {
-  const url = await resolveChannelUrl(channel, token);
+async function sendJoinPrompt(chatId: number, channels: string[], token: string) {
+  const rows: InlineKeyboard = [];
+
+  for (const channel of channels) {
+    const url = await resolveChannelUrl(channel, token);
+    rows.push([{ text: `Join ${channel}`, url }]);
+  }
+
+  rows.push([{ text: "Sudah join, cek ulang", callback_data: "rejoin" }]);
+
+  const list = channels.length > 1 ? `(${channels.length} channel)` : "";
 
   await sendTelegramMessage(
     chatId,
-    "Sebelum masuk katalog, join channel kami dulu ya.\n\nSetelah join, tekan tombol «Sudah join, cek ulang».",
-    [
-      [{ text: "Join Channel", url }],
-      [{ text: "Sudah join, cek ulang", callback_data: "rejoin" }],
-    ],
+    `Sebelum masuk katalog, join channel kami dulu ya ${list}.\n\nSetelah join, tekan tombol «Sudah join, cek ulang».`,
+    rows,
   ).catch(() => null);
 }
 

@@ -79,7 +79,7 @@ Perintah buyer: `/start`, `/products`, `/history`. Deep link `t.me/<bot>?start=b
 
 **Judul katalog**: field *Judul Katalog Telegram* di halaman Telegram (kosong = ikut judul embed Discord).
 
-**Gate join channel**: aktifkan *Wajib join channel* + isi channel (`@username` atau `-100...`). Buyer yang belum join ditahan sebelum katalog tampil dan diberi tombol Join + «Sudah join, cek ulang». Bot harus admin channel; kalau `getChatMember` error, gate dibuka (fail-open) agar penjualan tidak macet.
+**Gate join channel**: aktifkan *Wajib join channel* + isi daftar channel (`@username` atau `-100...`, **satu per baris** — bisa lebih dari satu). Buyer harus join semua channel; kalau ada yang belum, bot menampilkan tombol Join per channel + «Sudah join, cek ulang». Bot harus admin di setiap channel; kalau `getChatMember` error, channel itu dilewati (fail-open) agar penjualan tidak macet.
 
 **Channel log store**: tambahkan bot sebagai admin di channel → chat ID otomatis tersimpan di *Chat ID Notifikasi Admin* (event `my_chat_member`), lalu buy alert masuk ke channel itu. Bot juga mengirim pesan konfirmasi saat ditambahkan.
 

@@ -195,6 +195,13 @@ export async function answerCallbackQuery(
   );
 }
 
+export function parseRequiredChannels(raw?: string | null) {
+  return (raw || "")
+    .split(/[\s,]+/)
+    .map((channel) => channel.trim())
+    .filter(Boolean);
+}
+
 export function buildQtyKeyboard(productId: string, maxQty: number) {
   const quantities = [1, 2, 3, 5, 10].filter((qty) => qty <= Math.max(1, maxQty));
   const rows: InlineKeyboard = [];

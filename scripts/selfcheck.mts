@@ -10,7 +10,7 @@ import {
   resolveUnitPrice,
 } from "../src/lib/pricing";
 import { slugify } from "../src/lib/slug";
-import { buildQtyKeyboard } from "../src/lib/telegram";
+import { buildQtyKeyboard, parseRequiredChannels } from "../src/lib/telegram";
 import { buildCatalogKeyboard } from "../src/bot/telegram/catalog";
 
 assert.equal(normalizePlatform("telegram"), "telegram");
@@ -59,6 +59,14 @@ assert.equal(
 );
 assert.equal(slugify("Akun Netflix  Premium!"), "akun-netflix-premium");
 assert.equal(slugify("!!!"), "produk");
+
+assert.deepEqual(parseRequiredChannels("@satu\n@sdua, -100123 ,,\n"), [
+  "@satu",
+  "@sdua",
+  "-100123",
+]);
+assert.deepEqual(parseRequiredChannels(""), []);
+assert.deepEqual(parseRequiredChannels(null), []);
 
 // migrasi kolom platform harus ada di DB lama maupun baru
 const order = await prisma.order.findMany({ take: 1 });
