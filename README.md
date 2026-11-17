@@ -77,6 +77,12 @@ Field **Chat ID Notifikasi Admin** hanya untuk buy alert dan pesan tes (boleh ID
 
 Perintah buyer: `/start`, `/products`, `/history`. Deep link `t.me/<bot>?start=buy_<productId>` juga tetap didukung.
 
+**Judul katalog**: field *Judul Katalog Telegram* di halaman Telegram (kosong = ikut judul embed Discord).
+
+**Gate join channel**: aktifkan *Wajib join channel* + isi channel (`@username` atau `-100...`). Buyer yang belum join ditahan sebelum katalog tampil dan diberi tombol Join + «Sudah join, cek ulang». Bot harus admin channel; kalau `getChatMember` error, gate dibuka (fail-open) agar penjualan tidak macet.
+
+**Channel log store**: tambahkan bot sebagai admin di channel → chat ID otomatis tersimpan di *Chat ID Notifikasi Admin* (event `my_chat_member`), lalu buy alert masuk ke channel itu. Bot juga mengirim pesan konfirmasi saat ditambahkan.
+
 ## Webhook Paymenku
 
 URL: `https://domain-kamu/api/webhooks/paymenku`

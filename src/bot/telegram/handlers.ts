@@ -3,10 +3,12 @@ import { prisma } from "../../lib/db";
 import { formatRupiah } from "../../lib/money";
 import { parsePriceTiers } from "../../lib/pricing";
 import { renderTemplate } from "../../lib/templates";
-import { getAllSettings } from "../../lib/settings";
+import { getAllSettings, getTelegramSettings, saveTelegramSettings } from "../../lib/settings";
 import {
   answerCallbackQuery,
   buildQtyKeyboard,
+  exportTelegramInviteLink,
+  getTelegramChatMember,
   sendTelegramMessage,
   sendTelegramPhoto,
   type InlineKeyboard,
@@ -18,6 +20,11 @@ import { getProductById, listProductsWithStock } from "../../services/productSer
 import { buildCatalogKeyboard, buildCatalogText } from "./catalog";
 
 export async function handleTelegramUpdate(update: TelegramUpdate) {
+  if (update.my_chat_member) {
+    await handleMyChatMember(update.my_chat_member);
+    return;
+  }
+
   if (update.callback_query) {
     await handleCallback(update.callback_query);
     return;
@@ -28,6 +35,24 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   }
 }
 
+async function handleMyChatMember(
+  update: NonNullable<TelegramUpdate["my_chat_member"]>,
+) {
+  const isChannel = update.chat.type === "channel" || update.chat.type === "supergroup";
+  const status = update.new_chat_member.status;
+
+  if (!isChannel || !["member", "administrator", "creator"].includes(status)) {
+    return;
+  }
+
+  await saveTelegramSettings({ telegramAdminChannelId: String(update.chat.id) });
+
+  await sendTelegramMessage(
+    update.chat.id,
+    "Bot terhubung. Chat ini otomatis dipakai sebagai channel log store.",
+  ).catch(() => null);
+}
+
 async function handleMessage(message: NonNullable<TelegramUpdate["message"]>) {
   const chatId = message.chat.id;
   const text = (message.text || "").trim();
@@ -35,6 +60,10 @@ async function handleMessage(message: NonNullable<TelegramUpdate["message"]>) {
 
   if (command === "/start") {
     const payload = text.split(/\s+/)[1] || "";
+
+    if (!(await ensureJoined(chatId, message.from?.id || chatId))) {
+      return;
+    }
 
     if (payload.startsWith("buy_")) {
       await showProduct(chatId, payload.slice(4));
@@ -46,6 +75,10 @@ async function handleMessage(message: NonNullable<TelegramUpdate["message"]>) {
   }
 
   if (command === "/products" || command === "/menu") {
+    if (!(await ensureJoined(chatId, message.from?.id || chatId))) {
+      return;
+    }
+
     await showCatalog(chatId);
     return;
   }
@@ -75,7 +108,7 @@ async function showCatalog(chatId: number) {
 
   await sendTelegramMessage(
     chatId,
-    buildCatalogText(active, settings.text.embedTitle),
+    buildCatalogText(active, settings.telegram.telegramCatalogTitle || settings.text.embedTitle),
     buildCatalogKeyboard(active),
   );
 }
@@ -153,8 +186,24 @@ async function handleCallback(callback: NonNullable<TelegramUpdate["callback_que
     return;
   }
 
+  if (data === "rejoin") {
+    await answerCallbackQuery(callback.id, "Mengecek membership...").catch(() => null);
+    membershipCache.clear();
+
+    if (await ensureJoined(chatId, callback.from.id)) {
+      await showCatalog(chatId);
+    }
+
+    return;
+  }
+
   if (data.startsWith("prod:")) {
     await answerCallbackQuery(callback.id).catch(() => null);
+
+    if (!(await ensureJoined(chatId, callback.from.id))) {
+      return;
+    }
+
     await showProduct(chatId, data.slice("prod:".length));
     return;
   }
@@ -168,6 +217,11 @@ async function handleCallback(callback: NonNullable<TelegramUpdate["callback_que
   if (data.startsWith("qty:")) {
     const [, productId, qtyRaw] = data.split(":");
     await answerCallbackQuery(callback.id).catch(() => null);
+
+    if (!(await ensureJoined(chatId, callback.from.id))) {
+      return;
+    }
+
     await createTelegramOrder(chatId, callback.from, productId, Number(qtyRaw));
     return;
   }
@@ -273,5 +327,93 @@ function describeStatus(status: string) {
       return "Pembayaran sudah direfund.";
     default:
       return `Status order: ${status}`;
+  }
+}
+
+const MEMBERSHIP_TTL_MS = 5 * 60 * 1000;
+const membershipCache = new Map<string, number>();
+const inviteLinkCache = new Map<string, string>();
+
+/** Gate join channel: true kalau boleh lanjut ke katalog. */
+async function ensureJoined(chatId: number, userId: number) {
+  const settings = await getTelegramSettings();
+
+  if (
+    !settings.telegramForceJoinEnabled ||
+    !settings.telegramForceJoinChannel ||
+    !settings.telegramBotToken
+  ) {
+    return true;
+  }
+
+  const channel = settings.telegramForceJoinChannel;
+  const key = `${channel}:${userId}`;
+  const cachedUntil = membershipCache.get(key);
+
+  if (cachedUntil && cachedUntil > Date.now()) {
+    return true;
+  }
+
+  try {
+    const member = await getTelegramChatMember(
+      channel,
+      userId,
+      settings.telegramBotToken,
+    );
+
+    if (["creator", "administrator", "member"].includes(member.status)) {
+      membershipCache.set(key, Date.now() + MEMBERSHIP_TTL_MS);
+      return true;
+    }
+  } catch (error) {
+    console.error(
+      "[telegram] cek membership gagal",
+      error instanceof Error ? error.message : error,
+    );
+
+    // Fail-open: salah konfigurasi channel jangan sampai memblokir penjualan.
+    return true;
+  }
+
+  await sendJoinPrompt(chatId, channel, settings.telegramBotToken);
+  return false;
+}
+
+async function sendJoinPrompt(chatId: number, channel: string, token: string) {
+  const url = await resolveChannelUrl(channel, token);
+
+  await sendTelegramMessage(
+    chatId,
+    "Sebelum masuk katalog, join channel kami dulu ya.\n\nSetelah join, tekan tombol «Sudah join, cek ulang».",
+    [
+      [{ text: "Join Channel", url }],
+      [{ text: "Sudah join, cek ulang", callback_data: "rejoin" }],
+    ],
+  ).catch(() => null);
+}
+
+async function resolveChannelUrl(channel: string, token: string) {
+  const trimmed = channel.trim();
+
+  if (trimmed.startsWith("@")) {
+    return `https://t.me/${trimmed.slice(1)}`;
+  }
+
+  if (/^https?:\/\//.test(trimmed)) {
+    return trimmed;
+  }
+
+  const cached = inviteLinkCache.get(trimmed);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const link = await exportTelegramInviteLink(trimmed, token);
+    inviteLinkCache.set(trimmed, link);
+    return link;
+  } catch {
+    return `https://t.me/${trimmed}`;
   }
 }

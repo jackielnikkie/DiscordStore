@@ -20,6 +20,10 @@ export type TelegramUpdate = {
     from: { id: number; username?: string; first_name?: string };
     message?: { message_id: number; chat: { id: number; type: string } };
   };
+  my_chat_member?: {
+    chat: { id: number; type: string; title?: string; username?: string };
+    new_chat_member: { status: string };
+  };
 };
 
 type TelegramResponse<T> = {
@@ -90,8 +94,35 @@ export async function getTelegramUpdates(
   return call<TelegramUpdate[]>(
     token,
     "getUpdates",
-    { offset, timeout: timeoutSec, allowed_updates: ["message", "callback_query"] },
+    {
+      offset,
+      timeout: timeoutSec,
+      allowed_updates: ["message", "callback_query", "my_chat_member"],
+    },
     (timeoutSec + 10) * 1000,
+  );
+}
+
+export async function getTelegramChatMember(
+  chatId: number | string,
+  userId: number | string,
+  token?: string,
+) {
+  return call<{ status: string }>(
+    token || (await resolveTelegramToken()),
+    "getChatMember",
+    { chat_id: chatId, user_id: userId },
+  );
+}
+
+export async function exportTelegramInviteLink(
+  chatId: number | string,
+  token?: string,
+) {
+  return call<string>(
+    token || (await resolveTelegramToken()),
+    "exportChatInviteLink",
+    { chat_id: chatId },
   );
 }
 

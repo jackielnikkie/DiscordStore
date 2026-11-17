@@ -111,8 +111,12 @@ export const paymentSettingsSchema = z.object({
 });
 
 export const telegramSettingsSchema = z.object({
-  telegramEnabled: stringToBoolean(false),  telegramBotToken: z.string().trim().optional().or(z.literal("")),
+  telegramEnabled: stringToBoolean(false),
+  telegramBotToken: z.string().trim().optional().or(z.literal("")),
   telegramAdminChannelId: z.string().trim().optional().or(z.literal("")),
+  telegramCatalogTitle: z.string().trim().optional().or(z.literal("")),
+  telegramForceJoinEnabled: stringToBoolean(false),
+  telegramForceJoinChannel: z.string().trim().optional().or(z.literal("")),
 });
 
 export const textSettingsSchema = z.object({

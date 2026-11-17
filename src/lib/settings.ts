@@ -40,6 +40,9 @@ export type TelegramSettings = {
   telegramEnabled: boolean;
   telegramBotToken: string;
   telegramAdminChannelId: string;
+  telegramCatalogTitle: string;
+  telegramForceJoinEnabled: boolean;
+  telegramForceJoinChannel: string;
   telegramBotUsername: string;
   telegramReadyState: string;
   telegramLastHeartbeatAt: string;
@@ -127,6 +130,9 @@ const telegramDefaults: TelegramSettings = {
   telegramEnabled: false,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
   telegramAdminChannelId: "",
+  telegramCatalogTitle: "",
+  telegramForceJoinEnabled: false,
+  telegramForceJoinChannel: "",
   telegramBotUsername: "",
   telegramReadyState: "offline",
   telegramLastHeartbeatAt: "",
@@ -207,6 +213,14 @@ export async function getAllSettings(): Promise<AppSettings> {
         map.get("telegramBotToken") || telegramDefaults.telegramBotToken,
       telegramAdminChannelId:
         map.get("telegramAdminChannelId") || telegramDefaults.telegramAdminChannelId,
+      telegramCatalogTitle:
+        map.get("telegramCatalogTitle") || telegramDefaults.telegramCatalogTitle,
+      telegramForceJoinEnabled: parseBoolean(
+        map.get("telegramForceJoinEnabled"),
+        telegramDefaults.telegramForceJoinEnabled,
+      ),
+      telegramForceJoinChannel:
+        map.get("telegramForceJoinChannel") || telegramDefaults.telegramForceJoinChannel,
       telegramBotUsername:
         map.get("telegramBotUsername") || telegramDefaults.telegramBotUsername,
       telegramReadyState:

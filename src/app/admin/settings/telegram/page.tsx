@@ -68,7 +68,7 @@ export default async function TelegramSettingsPage({
             </div>
             <p className="text-xs text-muted-foreground">
               Katalog dikirim bot langsung di chat pribadi buyer (/start). Chat ID di atas
-              hanya dipakai untuk buy alert &amp; tes pesan.
+              dipakai untuk log store (buy alert &amp; tes pesan).
             </p>
             <p className="text-xs text-muted-foreground">
               Status: {telegram.telegramReadyState}
@@ -78,6 +78,55 @@ export default async function TelegramSettingsPage({
               {telegram.telegramLastHeartbeatAt
                 ? ` • heartbeat ${telegram.telegramLastHeartbeatAt}`
                 : ""}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Katalog &amp; Gate Join</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field
+                label="Judul Katalog Telegram"
+                name="telegramCatalogTitle"
+                defaultValue={telegram.telegramCatalogTitle}
+                placeholder="Toko Akun Digital"
+              />
+              <Field
+                label="Channel Wajib Join (@username atau -100...)"
+                name="telegramForceJoinChannel"
+                defaultValue={telegram.telegramForceJoinChannel}
+                placeholder="@lapakloka atau -1001234567890"
+              />
+            </div>
+            <div className="flex flex-wrap gap-6">
+              <ToggleField
+                label="Wajib join channel sebelum lihat katalog"
+                name="telegramForceJoinEnabled"
+                defaultChecked={telegram.telegramForceJoinEnabled}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Kalau aktif, buyer yang belum join channel akan ditahan sebelum katalog
+              tampil. Bot harus admin channel agar bisa cek membership (getChatMember).
+              Judul kosong = ikut judul embed Discord.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Cara memasang bot ke channel log</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm text-muted-foreground">
+            <p>1. Buat channel (atau pakai yang sudah ada), lalu buka Channel Settings → Administrators.</p>
+            <p>2. Tambahkan bot{telegram.telegramBotUsername ? ` @${telegram.telegramBotUsername}` : " kamu"} sebagai admin (cukup izin kirim pesan).</p>
+            <p>3. Chat ID channel akan terisi otomatis di kolom di atas begitu bot ditambahkan — tidak perlu cari manual.</p>
+            <p>4. Kalau ingin manual: jadikan channel publik, lalu isi <code>@username</code>-nya.</p>
+            <p>
+              Chat ID terdeteksi: <span className="font-mono text-foreground">{telegram.telegramAdminChannelId || "belum ada"}</span>
             </p>
           </CardContent>
         </Card>
