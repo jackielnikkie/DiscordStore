@@ -46,11 +46,26 @@ async function handleMyChatMember(
     return;
   }
 
-  await saveTelegramSettings({ telegramAdminChannelId: String(update.chat.id) });
+  const settings = await getTelegramSettings();
+  const current = settings.telegramAdminChannelId;
+  const detected = String(update.chat.id);
+
+  // Jangan pernah menimpa channel log yang sudah diatur admin.
+  if (current) {
+    await sendTelegramMessage(
+      update.chat.id,
+      current === detected
+        ? "Bot terhubung. Channel ini dipakai sebagai channel log store."
+        : `Bot terhubung. Channel log store tetap yang sudah diatur (${current}). Ganti manual di panel kalau mau pakai channel ini.`,
+    ).catch(() => null);
+    return;
+  }
+
+  await saveTelegramSettings({ telegramAdminChannelId: detected });
 
   await sendTelegramMessage(
     update.chat.id,
-    "Bot terhubung. Chat ini otomatis dipakai sebagai channel log store.",
+    "Bot terhubung. Chat ini dipakai sebagai channel log store.",
   ).catch(() => null);
 }
 

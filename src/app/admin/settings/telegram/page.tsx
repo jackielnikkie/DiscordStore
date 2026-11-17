@@ -233,7 +233,7 @@ export default async function TelegramSettingsPage({
           <CardContent className="grid gap-2 text-sm text-muted-foreground">
             <p>1. Buat channel (atau pakai yang sudah ada), lalu buka Channel Settings → Administrators.</p>
             <p>2. Tambahkan bot{telegram.telegramBotUsername ? ` @${telegram.telegramBotUsername}` : " kamu"} sebagai admin (cukup izin kirim pesan).</p>
-            <p>3. Chat ID channel akan terisi otomatis di kolom di atas begitu bot ditambahkan — tidak perlu cari manual.</p>
+            <p>3. Chat ID channel terisi otomatis di kolom di atas <strong>hanya jika kolom masih kosong</strong> — channel log yang sudah diatur tidak akan ditimpa saat bot ditambahkan ke channel lain.</p>
             <p>4. Kalau ingin manual: jadikan channel publik, lalu isi <code>@username</code>-nya.</p>
             <p>
               Chat ID terdeteksi: <span className="font-mono text-foreground">{telegram.telegramAdminChannelId || "belum ada"}</span>
