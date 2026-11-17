@@ -1,12 +1,27 @@
 import crypto from "node:crypto";
 
-const sessionSecretFromEnv = process.env.SESSION_SECRET?.trim();
+let cachedSessionSecret: string | null = null;
 
-if (!sessionSecretFromEnv && process.env.NODE_ENV === "production") {
-  throw new Error("SESSION_SECRET wajib diisi di production");
+/**
+ * Lazy: build `next build` jalan tanpa SESSION_SECRET, jadi jangan throw di module scope.
+ */
+function getSessionSecret() {
+  if (cachedSessionSecret) {
+    return cachedSessionSecret;
+  }
+
+  const fromEnv = process.env.SESSION_SECRET?.trim();
+
+  if (!fromEnv && process.env.NODE_ENV === "production") {
+    // Jangan throw: `next build` juga berjalan dengan NODE_ENV=production tanpa env runtime.
+    console.warn(
+      "[security] SESSION_SECRET kosong di production — sesi admin tidak stabil antar restart.",
+    );
+  }
+
+  cachedSessionSecret = fromEnv || crypto.randomBytes(32).toString("hex");
+  return cachedSessionSecret;
 }
-
-const sessionSecret = sessionSecretFromEnv || crypto.randomBytes(32).toString("hex");
 
 export function randomToken(size = 48) {
   return crypto.randomBytes(size).toString("hex");
@@ -14,7 +29,7 @@ export function randomToken(size = 48) {
 
 export function hashSessionToken(token: string) {
   return crypto
-    .createHmac("sha256", sessionSecret)
+    .createHmac("sha256", getSessionSecret())
     .update(token)
     .digest("hex");
 }
