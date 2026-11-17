@@ -1,6 +1,7 @@
 import { ProductType } from "../lib/db-types";
 
 import { prisma } from "../lib/db";
+import { slugify } from "../lib/slug";
 
 export type ProductWithStock = {
   id: string;
@@ -73,6 +74,27 @@ export async function getProductById(id: string): Promise<ProductWithStock | nul
       .length,
     soldStockCount: product.stocks.filter((stock: { status: string }) => stock.status === "SOLD").length,
   };
+}
+
+export async function ensureUniqueSlug(input: {
+  name: string;
+  slug?: string | null;
+  excludeId?: string | null;
+}) {
+  const base = slugify(input.slug?.trim() || input.name);
+  let candidate = base;
+  let counter = 2;
+
+  for (;;) {
+    const existing = await prisma.product.findUnique({ where: { slug: candidate } });
+
+    if (!existing || existing.id === input.excludeId) {
+      return candidate;
+    }
+
+    candidate = `${base}-${counter}`;
+    counter += 1;
+  }
 }
 
 export async function getDashboardMetrics() {

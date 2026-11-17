@@ -38,6 +38,8 @@ import {
 } from "../../lib/validators";
 import { cancelOrder, markOrderPaid, resendDelivery } from "../../services/orderService";
 import { checkOrderPaymentStatus } from "../../services/paymentService";
+import { ensureUniqueSlug } from "../../services/productService";
+import { normalizePriceTiersJson } from "../../lib/pricing";
 import { testDiscordConnection } from "../../lib/discord";
 
 export async function loginAction(formData: FormData) {
@@ -79,13 +81,18 @@ export async function saveProductAction(formData: FormData) {
 
   try {
     const input = productSchema.parse(Object.fromEntries(formData));
-    const payload = {
+    const slug = await ensureUniqueSlug({
       name: input.name,
       slug: input.slug,
+      excludeId: input.id || null,
+    });
+    const payload = {
+      name: input.name,
+      slug,
       description: emptyToNull(input.description),
       imageUrl: emptyToNull(input.imageUrl),
       price: input.price,
-      bulkPriceJson: emptyToNull(input.bulkPriceJson),
+      bulkPriceJson: normalizePriceTiersJson(input.bulkPriceJson),
       formatLabel: emptyToNull(input.formatLabel),
       type: input.type,
       customText: emptyToNull(input.customText),

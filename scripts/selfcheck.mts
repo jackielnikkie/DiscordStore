@@ -3,6 +3,13 @@ import { DatabaseSync } from "node:sqlite";
 
 import { prisma } from "../src/lib/db";
 import { normalizePlatform } from "../src/lib/notify";
+import {
+  normalizePriceTiersJson,
+  parsePriceTiers,
+  resolveOrderTotal,
+  resolveUnitPrice,
+} from "../src/lib/pricing";
+import { slugify } from "../src/lib/slug";
 import { buildQtyKeyboard } from "../src/lib/telegram";
 import { buildCatalogKeyboard } from "../src/bot/telegram/catalog";
 
@@ -34,6 +41,24 @@ assert.equal(
   ])[0][0].callback_data,
   "prod:pid",
 );
+
+const tiers = parsePriceTiers('[{"qty":20,"price":2000},{"qty":10,"price":3000}]');
+assert.deepEqual(tiers.map((tier) => tier.qty), [10, 20]);
+assert.equal(resolveUnitPrice(5000, tiers, 1), 5000);
+assert.equal(resolveUnitPrice(5000, tiers, 9), 5000);
+assert.equal(resolveUnitPrice(5000, tiers, 10), 3000);
+assert.equal(resolveUnitPrice(5000, tiers, 12), 3000);
+assert.equal(resolveUnitPrice(5000, tiers, 20), 2000);
+assert.equal(resolveUnitPrice(5000, tiers, 99), 2000);
+assert.deepEqual(resolveOrderTotal(5000, tiers, 12), { unitPrice: 3000, subtotal: 36000 });
+assert.equal(normalizePriceTiersJson('{"10":50}'), null);
+assert.equal(normalizePriceTiersJson(""), null);
+assert.equal(
+  normalizePriceTiersJson('[{"qty":1,"price":100},{"qty":5,"price":800}]'),
+  '[{"qty":5,"price":800}]',
+);
+assert.equal(slugify("Akun Netflix  Premium!"), "akun-netflix-premium");
+assert.equal(slugify("!!!"), "produk");
 
 // migrasi kolom platform harus ada di DB lama maupun baru
 const order = await prisma.order.findMany({ take: 1 });

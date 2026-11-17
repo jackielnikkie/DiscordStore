@@ -7,48 +7,19 @@ import {
 } from "discord.js";
 
 import { formatRupiah } from "../../lib/money";
+import { parsePriceTiers } from "../../lib/pricing";
 import { sendOrEditTextMessage, withDiscordClient } from "../../lib/discord";
 import { getAllSettings, saveBotSettings } from "../../lib/settings";
 import { listProductsWithStock, type ProductWithStock } from "../../services/productService";
 
 type ReadyClient = Client<true>;
 
-type BulkPriceEntry = { qty: number; price: number };
-
-function parseBulkPrices(raw: string | null): BulkPriceEntry[] {
-  if (!raw) return [];
-  try {
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return [];
-    return data
-      .map((entry) => ({
-        qty: Number(entry.qty ?? entry.quantity ?? entry.count),
-        price: Number(entry.price ?? entry.amount),
-      }))
-      .filter((entry) => Number.isFinite(entry.qty) && Number.isFinite(entry.price) && entry.qty > 0);
-  } catch {
-    return [];
-  }
-}
-
 function buildHargaValue(product: ProductWithStock): string {
-  const bulk = parseBulkPrices(product.bulkPriceJson);
+  const tiers = parsePriceTiers(product.bulkPriceJson);
+  const lines = [`- 1 akun: ${formatRupiah(product.price)}`];
 
-  if (bulk.length === 0) {
-    return `- 1 akun: ${formatRupiah(product.price)}`;
-  }
-
-  const baseQty = bulk[0].qty;
-  const unitPrice = baseQty === 1 ? product.price : Math.round(product.price / baseQty);
-
-  const lines: string[] = [];
-  if (baseQty !== 1 || unitPrice !== product.price) {
-    lines.push(`- 1 akun: ${formatRupiah(unitPrice)}`);
-  }
-
-  for (const entry of bulk) {
-    const label = entry.qty === 1 ? "1 akun" : `${entry.qty} akun`;
-    lines.push(`- ${label}: ${formatRupiah(entry.price)}`);
+  for (const tier of tiers) {
+    lines.push(`- ≥${tier.qty} akun: ${formatRupiah(tier.price)}/akun`);
   }
 
   return lines.join("\n");

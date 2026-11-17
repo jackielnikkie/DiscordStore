@@ -41,8 +41,9 @@ export const productSchema = z.object({
   slug: z
     .string()
     .trim()
-    .min(2, "Slug minimal 2 karakter")
-    .regex(/^[a-z0-9-]+$/, "Slug hanya boleh huruf kecil, angka, dan dash"),
+    .regex(/^[a-z0-9-]*$/, "Slug hanya boleh huruf kecil, angka, dan dash")
+    .optional()
+    .or(z.literal("")),
   description: z.string().trim().optional().or(z.literal("")),
   imageUrl: z.string().trim().url().optional().or(z.literal("")),
   price: stringToInt().refine((value) => value >= 0, "Harga tidak valid"),
@@ -57,12 +58,23 @@ export const productSchema = z.object({
       }
 
       try {
-        JSON.parse(value);
-        return true;
+        const data = JSON.parse(value);
+
+        if (!Array.isArray(data)) {
+          return false;
+        }
+
+        return data.every(
+          (tier) =>
+            Number.isFinite(Number(tier?.qty)) &&
+            Number(tier?.qty) >= 2 &&
+            Number.isFinite(Number(tier?.price)) &&
+            Number(tier?.price) > 0,
+        );
       } catch {
         return false;
       }
-    }, "Bulk price JSON tidak valid"),
+    }, "Harga grosir tidak valid"),
   formatLabel: z.string().trim().optional().or(z.literal("")),
   type: z.nativeEnum(ProductType),
   customText: z.string().trim().optional().or(z.literal("")),

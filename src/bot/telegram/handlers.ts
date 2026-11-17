@@ -1,6 +1,7 @@
 import { OrderStatus } from "../../lib/db-types";
 import { prisma } from "../../lib/db";
 import { formatRupiah } from "../../lib/money";
+import { parsePriceTiers } from "../../lib/pricing";
 import { renderTemplate } from "../../lib/templates";
 import { getAllSettings } from "../../lib/settings";
 import {
@@ -99,6 +100,10 @@ async function showProduct(chatId: number, productId: string) {
     `Harga: ${formatRupiah(product.price)}`,
     product.type === "CUSTOM_TEXT" ? "Tipe: custom" : `Stok: ${product.availableStockCount}`,
   ];
+
+  for (const tier of parsePriceTiers(product.bulkPriceJson)) {
+    lines.push(`≥${tier.qty} akun: ${formatRupiah(tier.price)}/akun`);
+  }
 
   if (product.description) {
     lines.push("", product.description);

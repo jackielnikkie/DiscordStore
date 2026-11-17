@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { jsonError, requireAdminApi } from "../../../../../lib/admin-api";
 import { prisma } from "../../../../../lib/db";
+import { normalizePriceTiersJson } from "../../../../../lib/pricing";
 import { requestEmbedSync } from "../../../../../lib/settings";
 import { productSchema } from "../../../../../lib/validators";
-import { getProductById } from "../../../../../services/productService";
+import { ensureUniqueSlug, getProductById } from "../../../../../services/productService";
 
 export async function GET(
   _request: NextRequest,
@@ -37,11 +38,11 @@ export async function PATCH(
       where: { id },
       data: {
         name: input.name,
-        slug: input.slug,
+        slug: await ensureUniqueSlug({ name: input.name, slug: input.slug, excludeId: id }),
         description: emptyToNull(input.description),
         imageUrl: emptyToNull(input.imageUrl),
         price: input.price,
-        bulkPriceJson: emptyToNull(input.bulkPriceJson),
+        bulkPriceJson: normalizePriceTiersJson(input.bulkPriceJson),
         formatLabel: emptyToNull(input.formatLabel),
         type: input.type,
         customText: emptyToNull(input.customText),

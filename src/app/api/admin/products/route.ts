@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdminApi, jsonError } from "../../../../lib/admin-api";
 import { prisma } from "../../../../lib/db";
-import { productSchema } from "../../../../lib/validators";
+import { normalizePriceTiersJson } from "../../../../lib/pricing";
 import { requestEmbedSync } from "../../../../lib/settings";
-import { listProductsWithStock } from "../../../../services/productService";
+import { productSchema } from "../../../../lib/validators";
+import { ensureUniqueSlug, listProductsWithStock } from "../../../../services/productService";
 
 export async function GET() {
   const authError = await requireAdminApi();
@@ -23,11 +24,11 @@ export async function POST(request: NextRequest) {
     const product = await prisma.product.create({
       data: {
         name: input.name,
-        slug: input.slug,
+        slug: await ensureUniqueSlug({ name: input.name, slug: input.slug }),
         description: emptyToNull(input.description),
         imageUrl: emptyToNull(input.imageUrl),
         price: input.price,
-        bulkPriceJson: emptyToNull(input.bulkPriceJson),
+        bulkPriceJson: normalizePriceTiersJson(input.bulkPriceJson),
         formatLabel: emptyToNull(input.formatLabel),
         type: input.type,
         customText: emptyToNull(input.customText),

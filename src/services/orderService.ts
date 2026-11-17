@@ -8,6 +8,7 @@ import { sendBuyAlert } from "../bot/services/buyAlert";
 import { syncAutoOrderEmbed } from "../bot/services/embedSync";
 import { sendCustomerMessage } from "../lib/notify";
 import { formatRupiah, parseMoney } from "../lib/money";
+import { parsePriceTiers, resolveOrderTotal } from "../lib/pricing";
 import { createPaymenkuTransaction } from "../lib/paymenku";
 import { getAllSettings, requestEmbedSync } from "../lib/settings";
 import { renderTemplate } from "../lib/templates";
@@ -93,6 +94,11 @@ export async function createOrder(input: OrderInput) {
   }
 
   const referenceId = createReferenceId();
+  const { unitPrice, subtotal } = resolveOrderTotal(
+    product.price,
+    parsePriceTiers(product.bulkPriceJson),
+    quantity,
+  );
   const order = await prisma.order.create({
     data: {
       referenceId,
@@ -101,8 +107,8 @@ export async function createOrder(input: OrderInput) {
       discordUsername: input.customerName || "",
       productId: product.id,
       quantity,
-      unitPrice: product.price,
-      subtotal: product.price * quantity,
+      unitPrice,
+      subtotal,
       paymentChannel: "qris",
     },
   });
