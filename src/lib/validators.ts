@@ -66,7 +66,7 @@ export const productSchema = z.object({
   formatLabel: z.string().trim().optional().or(z.literal("")),
   type: z.nativeEnum(ProductType),
   customText: z.string().trim().optional().or(z.literal("")),
-  isActive: stringToBoolean(true),
+  isActive: stringToBoolean(false),
   sortOrder: stringToInt(),
 });
 
@@ -87,8 +87,8 @@ export const botSettingsSchema = z.object({
   autoOrderChannelId: z.string().trim().optional().or(z.literal("")),
   buyAlertChannelId: z.string().trim().optional().or(z.literal("")),
   adminRoleId: z.string().trim().optional().or(z.literal("")),
-  enableBuyAlert: stringToBoolean(true),
-  enableAutoSyncEmbed: stringToBoolean(true),
+  enableBuyAlert: stringToBoolean(false),
+  enableAutoSyncEmbed: stringToBoolean(false),
 });
 
 export const paymentSettingsSchema = z.object({
@@ -99,8 +99,7 @@ export const paymentSettingsSchema = z.object({
 });
 
 export const telegramSettingsSchema = z.object({
-  telegramEnabled: stringToBoolean(false),
-  telegramBotToken: z.string().trim().optional().or(z.literal("")),
+  telegramEnabled: stringToBoolean(false),  telegramBotToken: z.string().trim().optional().or(z.literal("")),
   telegramAdminChannelId: z.string().trim().optional().or(z.literal("")),
 });
 

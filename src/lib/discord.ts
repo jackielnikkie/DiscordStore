@@ -91,7 +91,7 @@ export async function sendOrEditTextMessage(
 }
 
 export async function testDiscordConnection(
-  message = "Tes koneksi bot dari dashboard DiscordStore.",
+  message = "Tes koneksi bot dari dashboard LapakLoka-MultiBotStore.",
 ) {
   return withDiscordClient(async (client) => {
     const settings = await getBotSettings();

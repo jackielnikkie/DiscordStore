@@ -16,8 +16,8 @@ const monoFont = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DiscordStore",
-  description: "Discord store dashboard + bot management",
+  title: "LapakLoka-MultiBotStore",
+  description: "LapakLoka multi-platform store dashboard + bot management",
 };
 
 export const viewport: Viewport = {

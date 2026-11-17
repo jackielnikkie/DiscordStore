@@ -1,4 +1,4 @@
-# DiscordStore
+# LapakLoka-MultiBotStore
 
 Toko akun digital dengan dua storefront: **Discord** dan **Telegram**. Pembayaran QRIS otomatis via Paymenku, produk dikirim lewat chat/DM setelah pembayaran terverifikasi.
 

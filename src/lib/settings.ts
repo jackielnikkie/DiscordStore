@@ -120,7 +120,7 @@ const textDefaults: TextSettings = {
   embedTitle: "Toko Akun Digital",
   embedDescription:
     "Pembayaran otomatis via QRIS. Akun dikirim lewat DM.\nPastikan akun Discord kamu bisa menerima DM.",
-  embedFooter: "DiscordStore • Auto order",
+  embedFooter: "LapakLoka-MultiBotStore • Auto order",
 };
 
 const telegramDefaults: TelegramSettings = {

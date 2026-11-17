@@ -288,7 +288,7 @@ export async function testTelegramAction(formData: FormData) {
     if (settings.telegramAdminChannelId) {
       await sendTelegramMessage(
         settings.telegramAdminChannelId,
-        "Tes koneksi bot dari dashboard DiscordStore.",
+        "Tes koneksi bot dari dashboard LapakLoka-MultiBotStore.",
       );
       message += " Pesan tes terkirim ke chat admin.";
     }
@@ -330,7 +330,7 @@ export async function savePaymentSettingsAction(formData: FormData) {
 
 export async function saveTextSettingsAction(formData: FormData) {
   await requireAdminSession();
-  const redirectTo = getRedirectTarget(formData, "/admin/settings/text");
+  const redirectTo = getRedirectTarget(formData, "/admin/settings/bot");
 
   try {
     const input = textSettingsSchema.parse(Object.fromEntries(formData));

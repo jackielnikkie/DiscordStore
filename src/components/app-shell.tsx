@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Settings, Package, ShoppingCart, CreditCard, Bot, Type, Image, LogOut, LayoutDashboard } from "lucide-react";
+import { Settings, Package, ShoppingCart, CreditCard, Bot, Image, LogOut, LayoutDashboard } from "lucide-react";
 
 import { logoutAction } from "../app/admin/actions";
 import { requireAdminSession } from "../lib/auth";
+import { STORE_NAME } from "../lib/brand";
 import { detectPaymenkuMode, getAllSettings } from "../lib/settings";
 import { BotSettingsMenu } from "./bot-settings-menu";
 import { StatusPill } from "./status-pill";
@@ -34,7 +35,6 @@ const navItems = [
 
 const settingsItems = [
   { href: "/admin/settings/payment", label: "Payment Settings", icon: CreditCard },
-  { href: "/admin/settings/text", label: "Text Templates", icon: Type },
   { href: "/admin/settings/embed", label: "Embed Settings", icon: Image },
   { href: "/admin/settings/account", label: "Account", icon: Settings },
 ];
@@ -71,7 +71,7 @@ export async function AppShell({ title, description, actions, children }: AppShe
                     <Bot className="size-4" />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">DiscordStore</span>
+                    <span className="truncate font-semibold">{STORE_NAME}</span>
                     <span className="truncate text-xs">Admin Panel</span>
                   </div>
                 </a>

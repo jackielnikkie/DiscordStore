@@ -1,5 +1,6 @@
 import { AppShell } from "../../../../components/app-shell";
 import { Notice } from "../../../../components/notice";
+import { ToggleField } from "../../../../components/toggle-field";
 import { getAllSettings, maskSecret } from "../../../../lib/settings";
 import {
   saveTelegramSettingsAction,
@@ -62,7 +63,7 @@ export default async function TelegramSettingsPage({
               <ToggleField
                 label="Enable bot Telegram"
                 name="telegramEnabled"
-                defaultValue={telegram.telegramEnabled}
+                defaultChecked={telegram.telegramEnabled}
               />
             </div>
             <p className="text-xs text-muted-foreground">
@@ -113,30 +114,5 @@ function Field({
       <Label htmlFor={name}>{label}</Label>
       <Input id={name} name={name} defaultValue={defaultValue} placeholder={placeholder} />
     </div>
-  );
-}
-
-function ToggleField({
-  label,
-  name,
-  defaultValue,
-}: {
-  label: string;
-  name: string;
-  defaultValue: boolean;
-}) {
-  return (
-    <label className="flex cursor-pointer select-none items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={defaultValue}
-        className="peer sr-only"
-      />
-      <div className="relative h-[24px] w-[44px] shrink-0 rounded-full border-2 border-transparent bg-input shadow-sm transition-colors peer-checked:bg-primary peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-focus-visible:outline-primary">
-        <div className="pointer-events-none block size-[18px] rounded-full bg-primary-foreground shadow-sm transition-transform peer-checked:translate-x-5 peer-not-checked:translate-x-0" />
-      </div>
-      <span>{label}</span>
-    </label>
   );
 }

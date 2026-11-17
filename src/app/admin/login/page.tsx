@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { loginAction } from "../actions";
 import { getAdminSession } from "../../../lib/auth";
+import { STORE_NAME } from "../../../lib/brand";
 import { Notice } from "../../../components/notice";
 import { LazyThemeToggle } from "../../../components/ui/lazy-theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,7 @@ export default async function AdminLoginPage({
 
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-3 text-center">
-          <CardTitle className="text-2xl md:text-3xl font-bold">DiscordStore</CardTitle>
+          <CardTitle className="text-2xl md:text-3xl font-bold">{STORE_NAME}</CardTitle>
           <CardDescription className="text-sm">
             Masukan username dan password admin untuk melanjutkan.
           </CardDescription>
