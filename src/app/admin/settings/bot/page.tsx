@@ -6,6 +6,7 @@ import { SavedState, StatusGrid, StatusTile, WarningList } from "../../../../com
 import { formatRelativeTime, isFresh } from "../../../../lib/status";
 import {
   saveBotSettingsAction,
+  saveEmbedSettingsAction,
   saveTextSettingsAction,
   syncEmbedAction,
   testDiscordAction,
@@ -66,8 +67,8 @@ export default async function BotSettingsPage({
 
   return (
     <AppShell
-      title="Bot Settings"
-      description="Konfigurasi worker Discord dan template teks yang dipakai bot."
+      title="Discord Bot Settings"
+      description="Konfigurasi worker Discord, template teks, dan embed katalog."
     >
       <Notice
         message={typeof params.message === "string" ? params.message : undefined}
@@ -202,6 +203,33 @@ export default async function BotSettingsPage({
         </Card>
 
         <Button type="submit">Save Templates</Button>
+      </form>
+
+      <form id="embed-settings-form" action={saveEmbedSettingsAction} className="space-y-6">
+        <input type="hidden" name="redirectTo" value="/admin/settings/bot" />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Discord Embed Message</CardTitle>
+            <CardDescription>Pesan auto-order Discord embed</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="embedTitle">Embed Title</Label>
+              <Input id="embedTitle" name="embedTitle" defaultValue={settings.text.embedTitle} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="embedDescription">Embed Description</Label>
+              <Textarea id="embedDescription" name="embedDescription" defaultValue={settings.text.embedDescription} rows={4} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="embedFooter">Embed Footer</Label>
+              <Input id="embedFooter" name="embedFooter" defaultValue={settings.text.embedFooter} />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Button type="submit">Save Embed</Button>
       </form>
     </AppShell>
   );

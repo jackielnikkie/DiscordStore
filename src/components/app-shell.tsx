@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { Settings, Package, ShoppingCart, CreditCard, Bot, Image, LogOut, LayoutDashboard } from "lucide-react";
+import { Settings, Package, ShoppingCart, CreditCard, Bot, LogOut, LayoutDashboard } from "lucide-react";
 
 import { logoutAction } from "../app/admin/actions";
 import { requireAdminSession } from "../lib/auth";
 import { STORE_NAME } from "../lib/brand";
 import { detectPaymenkuMode, getAllSettings } from "../lib/settings";
-import { BotSettingsMenu } from "./bot-settings-menu";
+import { isFresh } from "../lib/status";
+import { SettingsGroupMenu } from "./settings-group-menu";
 import { StatusPill } from "./status-pill";
 import { LazyThemeToggle } from "@/components/ui/lazy-theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -34,8 +35,6 @@ const navItems = [
 ];
 
 const settingsItems = [
-  { href: "/admin/settings/payment", label: "Payment Settings", icon: CreditCard },
-  { href: "/admin/settings/embed", label: "Embed Settings", icon: Image },
   { href: "/admin/settings/account", label: "Account", icon: Settings },
 ];
 
@@ -51,12 +50,12 @@ export async function AppShell({ title, description, actions, children }: AppShe
     requireAdminSession(),
     getAllSettings(),
   ]);
-  const botHeartbeat = settings.bot.botLastHeartbeatAt
-    ? new Date(settings.bot.botLastHeartbeatAt).getTime()
-    : 0;
   const botOnline =
     settings.bot.botReadyState.startsWith("online") &&
-    Date.now() - botHeartbeat < 90_000;
+    isFresh(settings.bot.botLastHeartbeatAt, 90_000);
+  const telegramOnline =
+    settings.telegram.telegramReadyState.startsWith("online") &&
+    isFresh(settings.telegram.telegramLastHeartbeatAt, 180_000);
   const paymenkuMode = detectPaymenkuMode(settings.payment.paymenkuApiKey);
 
   return (
@@ -102,7 +101,8 @@ export async function AppShell({ title, description, actions, children }: AppShe
             <SidebarGroupLabel>Settings</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                <BotSettingsMenu />
+                <SettingsGroupMenu group="bot" />
+                <SettingsGroupMenu group="payment" />
                 {settingsItems.map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild>
@@ -138,8 +138,12 @@ export async function AppShell({ title, description, actions, children }: AppShe
             {paymenkuMode === "production" ? "Live" : "Sandbox"}
           </Badge>
           <StatusPill
-            label={botOnline ? "Online" : "Offline"}
+            label={`Discord ${botOnline ? "Online" : "Offline"}`}
             tone={botOnline ? "success" : "neutral"}
+          />
+          <StatusPill
+            label={`Telegram ${telegramOnline ? "Online" : "Offline"}`}
+            tone={telegramOnline ? "success" : "neutral"}
           />
           <LazyThemeToggle />
         </header>

@@ -357,7 +357,7 @@ export async function saveTextSettingsAction(formData: FormData) {
 
 export async function saveEmbedSettingsAction(formData: FormData) {
   await requireAdminSession();
-  const redirectTo = getRedirectTarget(formData, "/admin/settings/embed");
+  const redirectTo = getRedirectTarget(formData, "/admin/settings/bot");
 
   try {
     const input = embedSettingsSchema.parse(Object.fromEntries(formData));

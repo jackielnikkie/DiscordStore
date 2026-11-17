@@ -58,7 +58,7 @@ export default async function TelegramSettingsPage({
 
   return (
     <AppShell
-      title="Telegram Settings"
+      title="Telegram Bot Settings"
       description="Storefront Telegram: katalog, invoice QRIS, dan delivery otomatis lewat chat bot."
     >
       <Notice
