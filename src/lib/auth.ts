@@ -2,11 +2,25 @@ import { compareSync, hashSync } from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { hashSessionToken, randomToken } from "./crypto";
+import {
+  hashSessionToken,
+  randomToken,
+  signSessionToken,
+  timingSafeCompare,
+} from "./crypto";
 import { prisma } from "./db";
 
-const SESSION_COOKIE = "discordstore_admin";
+const SESSION_COOKIE_BASE = "discordstore_admin";
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+// `__Host-` hanya valid bila Secure + Path=/ + tanpa Domain (dipenuhi di setSessionCookie).
+const SESSION_COOKIE = IS_PRODUCTION
+  ? `__Host-${SESSION_COOKIE_BASE}`
+  : SESSION_COOKIE_BASE;
+// src/middleware.ts memakai nama cookie yang sama (hardcode, tidak boleh impor
+// file ini karena menarik bcryptjs/prisma yang tidak kompatibel Edge runtime).
+const SESSION_COOKIE_VERSION = "v1";
 const SESSION_DURATION_DAYS = 7;
+const SESSION_IDLE_MS = 60 * 60 * 1000;
 // Cost-12 bcrypt hash of a throwaway string. Used to burn the same CPU time when
 // the username is wrong or no hash is configured, so response timing cannot be
 // used to enumerate valid usernames.
@@ -15,6 +29,7 @@ const DUMMY_PASSWORD_HASH =
 export const ADMIN_PASSWORD_MIN_LENGTH = 8;
 const ADMIN_PASSWORD_HASH_SETTING_KEY = "env__admin_password_hash";
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+// ponytail: counter in-memory hilang saat restart; upgrade ke SQLite kalau brute force nyata.
 const LOGIN_RATE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_LIMITS = {
   ip: 5,
@@ -54,21 +69,122 @@ function getAdminUsername() {
   return process.env.ADMIN_USERNAME || "admin";
 }
 
-export async function getAdminSession() {
-  const cookieStore = await cookies();
-  const rawToken = cookieStore.get(SESSION_COOKIE)?.value;
+export function getClientIpFromHeaders(headers: Headers): string {
+  // Caddy menambahkan hop klien asli di ujung kanan X-Forwarded-For; hop paling
+  // kiri dikendalikan klien. Ambil hop terakhir, jangan percaya X-Real-IP mentah.
+  const forwarded = headers.get("x-forwarded-for");
 
-  if (!rawToken) {
+  if (!forwarded) {
+    return "unknown";
+  }
+
+  const hops = forwarded
+    .split(",")
+    .map((hop) => hop.trim())
+    .filter(Boolean);
+
+  return hops[hops.length - 1] || "unknown";
+}
+
+export function getClientIp(request: { headers: Headers }): string {
+  return getClientIpFromHeaders(request.headers);
+}
+
+type CookieStore = Awaited<ReturnType<typeof cookies>>;
+
+function encodeSessionCookie(rawToken: string, lastSeenAt: number) {
+  const payload = `${SESSION_COOKIE_VERSION}.${rawToken}.${lastSeenAt}`;
+  return `${payload}.${signSessionToken(payload)}`;
+}
+
+function decodeSessionCookie(value: string) {
+  const parts = value.split(".");
+
+  if (parts.length !== 4) {
     return null;
   }
 
-  const tokenHash = hashSessionToken(rawToken);
-  const session = await prisma.adminSession.findUnique({
-    where: { tokenHash },
-  });
+  const [version, rawToken, lastSeen, signature] = parts;
 
-  if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+  if (version !== SESSION_COOKIE_VERSION || !rawToken || !lastSeen) {
     return null;
+  }
+
+  const lastSeenAt = Number(lastSeen);
+
+  if (!Number.isFinite(lastSeenAt)) {
+    return null;
+  }
+
+  const payload = `${version}.${rawToken}.${lastSeen}`;
+
+  if (!timingSafeCompare(signSessionToken(payload), signature)) {
+    return null;
+  }
+
+  return { rawToken, lastSeenAt };
+}
+
+function setSessionCookie(
+  cookieStore: CookieStore,
+  rawToken: string,
+  expiresAt: Date,
+) {
+  cookieStore.set({
+    name: SESSION_COOKIE,
+    value: encodeSessionCookie(rawToken, Date.now()),
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: IS_PRODUCTION,
+    expires: expiresAt,
+  });
+}
+
+function refreshSessionCookie(
+  cookieStore: CookieStore,
+  rawToken: string,
+  expiresAt: Date,
+) {
+  try {
+    setSessionCookie(cookieStore, rawToken, expiresAt);
+  } catch {
+    // Server Component tidak boleh set cookie; sliding tetap terjadi pada
+    // Server Action / Route Handler berikutnya. Idle timeout tetap berlaku.
+  }
+}
+
+async function readAdminSession(allowCookieRefresh: boolean) {
+  const cookieStore = await cookies();
+  const decoded = decodeSessionCookie(
+    cookieStore.get(SESSION_COOKIE)?.value ?? "",
+  );
+
+  if (!decoded) {
+    return null;
+  }
+
+  const now = Date.now();
+
+  if (now - decoded.lastSeenAt > SESSION_IDLE_MS) {
+    return null;
+  }
+
+  const tokenHash = hashSessionToken(decoded.rawToken);
+  const session = await prisma.adminSession.findUnique({ where: { tokenHash } });
+
+  if (!session) {
+    return null;
+  }
+
+  const expiresAt = new Date(session.expiresAt);
+
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < now) {
+    return null;
+  }
+
+  if (allowCookieRefresh) {
+    refreshSessionCookie(cookieStore, decoded.rawToken, expiresAt);
   }
 
   return {
@@ -77,22 +193,13 @@ export async function getAdminSession() {
   };
 }
 
+export async function getAdminSession() {
+  return readAdminSession(true);
+}
+
 export async function requireAdminSession() {
   // Server-safe version without cookie mutation
-  const session = await (async () => {
-    try {
-      const cookieStore = await cookies();
-      const rawToken = cookieStore.get(SESSION_COOKIE)?.value;
-      if (!rawToken) return null;
-      const tokenHash = hashSessionToken(rawToken);
-      const sess = await prisma.adminSession.findUnique({ where: { tokenHash } });
-      return sess && new Date(sess.expiresAt).getTime() >= Date.now()
-        ? { username: getAdminUsername(), expiresAt: sess.expiresAt }
-        : null;
-    } catch {
-      return null;
-    }
-  })();
+  const session = await readAdminSession(false).catch(() => null);
 
   if (!session) {
     redirect("/admin/login");
@@ -138,11 +245,12 @@ export async function loginAdmin(
 export async function logoutAdmin() {
   const cookieStore = await cookies();
   const rawToken = cookieStore.get(SESSION_COOKIE)?.value;
+  const decoded = rawToken ? decodeSessionCookie(rawToken) : null;
 
-  if (rawToken) {
+  if (decoded) {
     await prisma.adminSession
       .delete({
-        where: { tokenHash: hashSessionToken(rawToken) },
+        where: { tokenHash: hashSessionToken(decoded.rawToken) },
       })
       .catch(() => null);
   }
@@ -210,15 +318,7 @@ async function createAdminSession() {
   });
 
   const cookieStore = await cookies();
-  cookieStore.set({
-    name: SESSION_COOKIE,
-    value: rawToken,
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    expires: expiresAt,
-  });
+  setSessionCookie(cookieStore, rawToken, expiresAt);
 }
 
 function enforceRateLimit(username: string, ipAddress: string) {

@@ -2,7 +2,7 @@
 
 Dokumen ini untuk session/engineer berikutnya. Tanpa secret: token, password, dan key **tidak** ditulis di sini (semua ada di `.env` VPS + panel admin).
 
-- Versi aplikasi: **1.1.0** → `src/lib/brand.ts` (`APP_VERSION`, tampil di sidebar `Admin Panel - v1.1.0`)
+- Versi aplikasi: **1.1.1** → `src/lib/brand.ts` (`APP_VERSION`, tampil di sidebar `Admin Panel - v1.1.1`)
 - Repo: `https://github.com/jackielnikkie/DiscordStore.git` (branch `main`)
 - Produksi: `https://55go.biz.id`
 
@@ -162,7 +162,9 @@ src/
 6. `ownerDiscord` kosong → baris `by @owner` tidak muncul.
 
 ### Backlog kode
-- `docs/security-audit-v1.1.0.md` → checklist v1.1.1: rate-limit login pakai XFF bisa dipalsukan, counter in-memory (hilang saat restart), `npm audit` dev-chain, dsb.
+- **v1.1.1 (selesai)**: checklist hardening audit v1.1.0 dijalankan — lihat `updatev1.1.1.md`.
+  Yang **dibatalkan**: rate limit Caddy (`rate_limit` butuh module non-standar, Caddy gagal start)
+  dan rekonsiliasi webhook berbasis log (tidak perlu; webhook sudah sinkron + backstop PENDING).
 - Refund/cancel **via API Paymenku** tidak diekspos ke UI (keputusan owner: tidak perlu; QRIS tidak didukung refund API).
 - Belum ada: export CSV order, chart omzet, low-stock alert, storefront web publik, halaman status order publik, voucher.
 - `dmInvoiceText` dipakai Telegram (template ringkas); invoice Discord masih hardcoded di embed.
@@ -178,8 +180,9 @@ src/
 | Pull image sebelum Actions selesai | cek run Actions `completed + success` dulu |
 | `bcrypt` hash di `.env` compose | `$` di-interpolasi compose → tulis `$$` |
 | SQLite shim | tidak ada `in`, `skip`, `AND` kompleks; pakai loop/`updateMany`; transaksi = `$transaction(fn)` |
-| Migrasi kolom | `ensureColumn()` di `src/lib/db.ts` (contoh: `Order.platform`, `Product.deliveryNote`) |
+| Migrasi kolom | `ensureColumn()` di `src/lib/db.ts` (contoh: `Order.platform`, `Product.deliveryNote`) — **wajib** tambah juga ke `TABLE_COLUMNS` (whitelist identifier v1.1.1), kalau tidak query throw |
 | Worker mati | order PENDING menggantung, auto-cancel tidak jalan |
+| Semua sesi admin invalid setelah upgrade v1.1.1 | nama cookie jadi `__Host-discordstore_admin` di production — login ulang sekali, bukan bug |
 | CSP admin | butuh `unsafe-inline` untuk hydration Next |
 
 ---

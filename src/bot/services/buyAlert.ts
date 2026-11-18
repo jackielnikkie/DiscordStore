@@ -17,14 +17,28 @@ type AlertPayload = {
   amount?: number;
 };
 
+// Telegram names are buyer-controlled. Strip control chars, backticks, and
+// break ping tokens (@everyone/@here/@&) so they cannot inject mentions or
+// markdown. Capped at 64 chars.
+function sanitizeTelegramName(value: string): string {
+  return value
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/@everyone/gi, "@\u200beveryone")
+    .replace(/@here/gi, "@\u200bhere")
+    .replace(/@&/g, "@\u200b&")
+    .replace(/`/g, "")
+    .slice(0, 64);
+}
+
 export async function sendBuyAlert(payload: AlertPayload, client?: ReadyClient) {
   const settings = await getAllSettings();
+  const telegramName =
+    payload.platform === "telegram"
+      ? sanitizeTelegramName(payload.customerName || payload.customerId)
+      : null;
   const content = renderTemplate(settings.text.buyAlertTemplate, {
-    user:
-      payload.platform === "telegram"
-        ? payload.customerName || payload.customerId
-        : `<@${payload.customerId}>`,
-    username: payload.customerName || payload.customerId,
+    user: telegramName ?? `<@${payload.customerId}>`,
+    username: telegramName ?? (payload.customerName || payload.customerId),
     productName: payload.productName,
     quantity: payload.quantity,
     // ponytail: empty string when amount absent, so template "— {{total}}" collapses to just "— ". Upgrade: strip trailing separator if the template ever needs cleaner output.

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Must stay in sync with SESSION_COOKIE in src/lib/auth.ts.
-// Duplicated instead of imported because auth.ts pulls in bcryptjs/prisma,
-// which are not Edge-runtime compatible. Keep this dependency-free.
-const SESSION_COOKIE = "discordstore_admin";
+// Must stay in sync with SESSION_COOKIE in src/lib/auth.ts (production adds the
+// `__Host-` prefix). Duplicated instead of imported because auth.ts pulls in
+// bcryptjs/prisma, which are not Edge-runtime compatible. Keep this dependency-free.
+const SESSION_COOKIE =
+  process.env.NODE_ENV === "production"
+    ? "__Host-discordstore_admin"
+    : "discordstore_admin";
 
 // Paths under /admin or /api/admin that must stay open without a session.
 const PUBLIC_PATHS = new Set(["/admin/login", "/api/admin/login", "/api/admin/logout"]);

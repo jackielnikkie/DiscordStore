@@ -3,6 +3,10 @@
 }
 
 {$DOMAIN} {
+	# SEC-02: `rate_limit` bukan direktif bawaan Caddy; butuh module non-standar
+	# (github.com/mholt/caddy-ratelimit via xcaddy). Image caddy:2-alpine tidak
+	# memuatnya, jadi TIDAK dipasang agar Caddy tetap start. Rate limit login admin
+	# tetap di app-level (src/lib/auth.ts, in-memory fast-path).
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"

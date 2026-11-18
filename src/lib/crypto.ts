@@ -2,8 +2,11 @@ import crypto from "node:crypto";
 
 let cachedSessionSecret: string | null = null;
 
+const MIN_SESSION_SECRET_LENGTH = 32;
+
 /**
- * Lazy: build `next build` jalan tanpa SESSION_SECRET, jadi jangan throw di module scope.
+ * Lazy: build `next build` jalan tanpa SESSION_SECRET (NODE_ENV=production), jadi
+ * throw hanya saat fungsi ini dipanggil di runtime — bukan di module scope.
  */
 function getSessionSecret() {
   if (cachedSessionSecret) {
@@ -11,16 +14,33 @@ function getSessionSecret() {
   }
 
   const fromEnv = process.env.SESSION_SECRET?.trim();
+  const usable =
+    fromEnv && fromEnv.length >= MIN_SESSION_SECRET_LENGTH ? fromEnv : null;
 
-  if (!fromEnv && process.env.NODE_ENV === "production") {
-    // Jangan throw: `next build` juga berjalan dengan NODE_ENV=production tanpa env runtime.
+  if (!usable) {
+    const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+
+    if (process.env.NODE_ENV === "production" && !isBuildPhase) {
+      // Fail fast di runtime production. Nilai secret tidak pernah dicetak.
+      throw new Error(
+        `SESSION_SECRET wajib diisi minimal ${MIN_SESSION_SECRET_LENGTH} karakter di production.`,
+      );
+    }
+
     console.warn(
-      "[security] SESSION_SECRET kosong di production — sesi admin tidak stabil antar restart.",
+      "[security] SESSION_SECRET kosong/terlalu pendek — memakai secret acak sementara (sesi admin tidak stabil antar restart).",
     );
   }
 
-  cachedSessionSecret = fromEnv || crypto.randomBytes(32).toString("hex");
+  cachedSessionSecret = usable || crypto.randomBytes(32).toString("hex");
   return cachedSessionSecret;
+}
+
+export function signSessionToken(payload: string) {
+  return crypto
+    .createHmac("sha256", getSessionSecret())
+    .update(payload)
+    .digest("hex");
 }
 
 export function randomToken(size = 48) {

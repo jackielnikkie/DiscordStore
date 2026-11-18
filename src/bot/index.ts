@@ -99,9 +99,39 @@ async function start() {
   }
 }
 
-/** Rekonsiliasi saja (docs Paymenku: webhook sumber status resmi, jangan polling agresif). */
+const WEBHOOK_LOG_TTL_DAYS = 30;
+
+/**
+ * SEC-09 TTL: buang PaymentWebhookLog lebih lama dari 30 hari.
+ * Shim src/lib/db.ts belum menyediakan `paymentWebhookLog.deleteMany` (hanya
+ * create/update), jadi guard ini no-op sampai model itu ditambahkan di shim.
+ */
+async function pruneWebhookLogs() {
+  const cutoff = new Date(Date.now() - WEBHOOK_LOG_TTL_DAYS * 86_400_000).toISOString();
+
+  try {
+    if (typeof prisma.paymentWebhookLog?.deleteMany !== "function") {
+      return;
+    }
+
+    await prisma.paymentWebhookLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  } catch (error) {
+    console.error(
+      "[bot] prune webhook log gagal",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+/**
+ * Rekonsiliasi saja (docs Paymenku: webhook sumber status resmi, jangan polling agresif).
+ * SEC-10: webhook diproses sebelum 2xx, tapi order yang tetap PENDING (proses gagal /
+ * provider berhenti retry) tetap diselamatkan dari sini dengan cek status ke Paymenku.
+ */
 function startOrderPoller() {
   const tick = async () => {
+    await pruneWebhookLogs();
+
     const pendingOrders = await prisma.order.findMany({
       where: {
         status: "PENDING",

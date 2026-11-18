@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { AdminAuthRateLimitError, loginAdmin } from "../../../../lib/auth";
+import {
+  AdminAuthRateLimitError,
+  getClientIp,
+  loginAdmin,
+} from "../../../../lib/auth";
 import { jsonError, requireSameOriginApi } from "../../../../lib/admin-api";
 import { loginSchema } from "../../../../lib/validators";
 
@@ -11,10 +15,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const input = loginSchema.parse(body);
-    const ipAddress =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
+    const ipAddress = getClientIp(request);
     const result = await loginAdmin(input.username, input.password, ipAddress);
 
     if (!result.success) {

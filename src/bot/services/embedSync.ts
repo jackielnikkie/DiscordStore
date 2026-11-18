@@ -14,6 +14,17 @@ import { listProductsWithStock, type ProductWithStock } from "../../services/pro
 
 type ReadyClient = Client<true>;
 
+// Product name/description/format are owner- and buyer-influenced text rendered
+// as Discord markdown. Strip control chars, normalize newlines, and neutralize
+// backticks so embeds/forum posts cannot be broken or turned into code fences.
+function sanitizeEmbedText(value: string, max: number): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+    .replace(/`/g, "\u2019")
+    .slice(0, max);
+}
+
 function buildHargaValue(product: ProductWithStock): string {
   const tiers = parsePriceTiers(product.bulkPriceJson);
   const lines = [`- 1 akun: ${formatRupiah(product.price)}`];
@@ -28,7 +39,8 @@ function buildHargaValue(product: ProductWithStock): string {
 function buildFormatValue(product: ProductWithStock): string {
   const raw = product.formatLabel || product.customText;
   if (!raw) return "";
-  return raw;
+  // Inline-code field: no backticks, no newlines.
+  return sanitizeEmbedText(raw, 1000).replace(/\n/g, " ");
 }
 
 async function buildStoreEmbeds() {
@@ -55,7 +67,7 @@ async function buildStoreEmbeds() {
           : "**Habis**";
 
     const embed = new EmbedBuilder()
-      .setTitle(product.name)
+      .setTitle(sanitizeEmbedText(product.name, 256))
       .setThumbnail(product.imageUrl ? product.imageUrl : null)
       .addFields(
         { name: "Stok", value: stockLabel, inline: true },
@@ -65,7 +77,7 @@ async function buildStoreEmbeds() {
       );
 
     if (product.description) {
-      embed.setDescription(product.description);
+      embed.setDescription(sanitizeEmbedText(product.description, 4096));
     }
 
     const formatValue = buildFormatValue(product);
@@ -91,7 +103,7 @@ async function buildProductButtons() {
         products.slice(index, index + 5).map((product: ProductWithStock) =>
           new ButtonBuilder()
             .setCustomId(`buy:${product.id}`)
-            .setLabel(`Buy ${product.name}`.slice(0, 80))
+            .setLabel(`Buy ${sanitizeEmbedText(product.name, 80)}`.slice(0, 80))
             .setStyle(ButtonStyle.Primary)
             .setDisabled(
               !product.isActive ||

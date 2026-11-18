@@ -56,6 +56,15 @@ export async function sendDirectMessage(
   return dm.send(payload);
 }
 
+// Buyer-controlled text must never ping @everyone/@here/roles. Default to no
+// mentions; caller's explicit allowedMentions always wins.
+function withSafeMentions(payload: MessageCreateOptions | string): MessageCreateOptions {
+  if (typeof payload === "string") {
+    return { content: payload, allowedMentions: { parse: [] } };
+  }
+  return payload.allowedMentions ? payload : { ...payload, allowedMentions: { parse: [] } };
+}
+
 export async function sendTextChannelMessage(
   client: Client<true>,
   channelId: string,
@@ -63,7 +72,7 @@ export async function sendTextChannelMessage(
 ) {
   const channel = await resolveTextChannel(client, channelId);
   if ("send" in channel) {
-    return channel.send(payload);
+    return channel.send(withSafeMentions(payload));
   }
   throw new Error("Channel does not support sending messages");
 }
@@ -80,12 +89,12 @@ export async function sendOrEditTextMessage(
     const existing = await channel.messages.fetch(messageId).catch(() => null);
 
     if (existing) {
-      return existing.edit(payload as MessageEditOptions);
+      return existing.edit(withSafeMentions(payload) as MessageEditOptions);
     }
   }
 
   if ("send" in channel) {
-    return channel.send(payload);
+    return channel.send(withSafeMentions(payload));
   }
   throw new Error("Channel does not support sending messages");
 }

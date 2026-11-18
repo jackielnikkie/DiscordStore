@@ -23,6 +23,33 @@ import { checkOrderPaymentStatus } from "../../services/paymentService";
 import { createOrder } from "../../services/orderService";
 import { getProductById } from "../../services/productService";
 
+const MAX_ORDER_QTY = 100;
+const ORDER_COOLDOWN_MS = 20_000;
+const orderCooldowns = new Map<string, number>();
+// ponytail: in-memory, hilang saat restart; upgrade ke tabel SQLite kalau spam jadi nyata.
+
+function clampQuantity(raw: number, maxQty: number): number | null {
+  const n = Math.trunc(raw);
+  if (!Number.isFinite(n) || n < 1) {
+    return null;
+  }
+  const cap = Math.min(MAX_ORDER_QTY, maxQty);
+  return cap >= 1 && n <= cap ? n : null;
+}
+
+function consumeOrderCooldown(platform: string, userId: string): boolean {
+  const key = `${platform}:${userId}`;
+  const now = Date.now();
+  const until = orderCooldowns.get(key);
+
+  if (until && until > now) {
+    return false;
+  }
+
+  orderCooldowns.set(key, now + ORDER_COOLDOWN_MS);
+  return true;
+}
+
 export function registerInteractionHandler(client: Client) {
   client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isButton()) {
@@ -101,14 +128,6 @@ async function handleBuyQuantitySubmit(interaction: ModalSubmitInteraction) {
     return;
   }
 
-  if (quantity > 999) {
-    await interaction.reply({
-      content: "Jumlah pembelian terlalu besar.",
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
@@ -120,10 +139,24 @@ async function handleBuyQuantitySubmit(interaction: ModalSubmitInteraction) {
       return;
     }
 
-    if (product.type === "STOCK_LINE" && product.availableStockCount < quantity) {
-      await interaction.editReply(
-        `Stok tidak cukup. Sisa stok tersedia: ${product.availableStockCount}.`,
-      );
+    if (product.type === "STOCK_LINE" && product.availableStockCount <= 0) {
+      await interaction.editReply(settings.text.warningStockEmpty);
+      return;
+    }
+
+    const maxQty =
+      product.type === "CUSTOM_TEXT"
+        ? MAX_ORDER_QTY
+        : Math.min(MAX_ORDER_QTY, product.availableStockCount);
+    const qty = clampQuantity(quantity, maxQty);
+
+    if (qty === null) {
+      await interaction.editReply("Jumlah pembelian tidak valid.");
+      return;
+    }
+
+    if (!consumeOrderCooldown("discord", interaction.user.id)) {
+      await interaction.editReply("Tunggu sebentar sebelum membuat order lagi ya.");
       return;
     }
 
@@ -141,7 +174,7 @@ async function handleBuyQuantitySubmit(interaction: ModalSubmitInteraction) {
       customerId: interaction.user.id,
       customerName: interaction.user.username,
       productId,
-      quantity,
+      quantity: qty,
     });
 
     await sendInvoiceDm(interaction.client as Client<true>, interaction.user.id, order);

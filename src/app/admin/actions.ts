@@ -9,6 +9,7 @@ import { syncAutoOrderEmbed } from "../../bot/services/embedSync";
 import {
   ADMIN_PASSWORD_MIN_LENGTH,
   changeAdminPasswordAction,
+  getClientIpFromHeaders,
   loginAdmin,
   logoutAdmin,
   requireAdminSession,
@@ -53,10 +54,7 @@ export async function loginAction(formData: FormData) {
   try {
     const input = loginSchema.parse(values);
     const headerStore = await headers();
-    const ipAddress =
-      headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      headerStore.get("x-real-ip") ||
-      "unknown";
+    const ipAddress = getClientIpFromHeaders(headerStore);
     const result = await loginAdmin(input.username, input.password, ipAddress);
 
     if (!result.success) {

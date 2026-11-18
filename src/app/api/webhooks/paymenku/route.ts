@@ -1,4 +1,4 @@
-import { after, NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { OrderStatus } from "../../../../lib/db-types";
 import { prisma } from "../../../../lib/db";
@@ -7,6 +7,10 @@ import { markOrderPaid, markOrderTerminalStatus } from "../../../../services/ord
 
 const MAX_WEBHOOK_BODY_BYTES = 32 * 1024;
 
+// SEC-09: simpan allowlist header saja, nilai sensitif diredaksi.
+const HEADER_ALLOWLIST = ["content-type", "user-agent"];
+const SENSITIVE_HEADER = /(signature|authorization|cookie|token|secret|api-?key)/i;
+
 export async function POST(request: NextRequest) {
   const declaredSize = Number(request.headers.get("content-length") || 0);
 
@@ -14,14 +18,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   }
 
-  const rawBody = await request.text();
-  const bodySize = Buffer.byteLength(rawBody, "utf8");
-  const signature = request.headers.get("x-paymenku-signature") || "";
-  const timestamp = request.headers.get("x-paymenku-timestamp") || "";
+  // SEC-04: Content-Length bisa absen/bohong, jadi tetap hitung byte saat streaming.
+  const rawBody = await readBodyLimited(request, MAX_WEBHOOK_BODY_BYTES);
 
-  if (bodySize > MAX_WEBHOOK_BODY_BYTES) {
+  if (rawBody === null) {
     return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   }
+
+  const signature = request.headers.get("x-paymenku-signature") || "";
+  const timestamp = request.headers.get("x-paymenku-timestamp") || "";
 
   const isValid = await verifyPaymenkuWebhookSignature(rawBody, timestamp, signature);
 
@@ -30,6 +35,7 @@ export async function POST(request: NextRequest) {
   }
 
   const payload = safeParseJson(rawBody);
+  let logId: string;
 
   try {
     const log = await prisma.paymentWebhookLog.create({
@@ -38,35 +44,35 @@ export async function POST(request: NextRequest) {
         trxId: stringValue(payload?.trx_id),
         referenceId: stringValue(payload?.reference_id),
         status: stringValue(payload?.status),
-        headersJson: JSON.stringify(Object.fromEntries(request.headers.entries())),
+        headersJson: JSON.stringify(collectLogHeaders(request.headers)),
         bodyJson: rawBody,
         isValid: true,
       },
     });
-
-    // Docs: balas 2xx dulu, proses di belakang. Webhook diulang bila lambat.
-    after(async () => {
-      try {
-        await processPayload(payload);
-        await prisma.paymentWebhookLog.update({
-          where: { id: log.id },
-          data: { processedAt: new Date() },
-        });
-      } catch (error) {
-        console.error(
-          "[paymenku] webhook gagal diproses",
-          error instanceof Error ? error.message : error,
-        );
-      }
-    });
-
-    return NextResponse.json({ ok: true });
+    logId = log.id;
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Webhook processing gagal" },
       { status: 400 },
     );
   }
+
+  // SEC-10: proses SEBELUM 2xx. Crash/gagal → provider retry (5xx); log tanpa
+  // processedAt + poller PENDING di src/bot/index.ts jadi backstop rekonsiliasi.
+  try {
+    await processPayload(payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Webhook processing gagal";
+    console.error("[paymenku] webhook gagal diproses", message);
+    const fatal = /tidak ditemukan|reference_id tidak ada/i.test(message);
+    return NextResponse.json({ ok: false }, { status: fatal ? 400 : 503 });
+  }
+
+  await prisma.paymentWebhookLog
+    .update({ where: { id: logId }, data: { processedAt: new Date() } })
+    .catch(() => null);
+
+  return NextResponse.json({ ok: true });
 }
 
 async function processPayload(payload: Record<string, unknown> | null) {
@@ -114,6 +120,53 @@ async function processPayload(payload: Record<string, unknown> | null) {
   if (status === "refunded") {
     await markOrderTerminalStatus(referenceId, OrderStatus.REFUNDED, updatePayload);
   }
+}
+
+/** Baca body sambil menghitung byte; `null` = melewati batas. */
+async function readBodyLimited(request: Request, maxBytes: number) {
+  if (!request.body) {
+    return "";
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+
+    if (done || !value) {
+      break;
+    }
+
+    total += value.byteLength;
+
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => null);
+      return null;
+    }
+
+    chunks.push(value);
+  }
+
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function collectLogHeaders(headers: Headers) {
+  const stored: Record<string, string> = {};
+
+  for (const [name, value] of headers.entries()) {
+    const key = name.toLowerCase();
+    const allowed = HEADER_ALLOWLIST.includes(key) || key.startsWith("x-paymenku-");
+
+    if (!allowed) {
+      continue;
+    }
+
+    stored[key] = SENSITIVE_HEADER.test(key) ? "[redacted]" : value;
+  }
+
+  return stored;
 }
 
 function safeParseJson(rawBody: string) {

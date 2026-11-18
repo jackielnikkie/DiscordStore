@@ -299,14 +299,59 @@ async function handleCallback(callback: NonNullable<TelegramUpdate["callback_que
   await answerCallbackQuery(callback.id).catch(() => null);
 }
 
+const MAX_ORDER_QTY = 100;
+const ORDER_COOLDOWN_MS = 20_000;
+const orderCooldowns = new Map<string, number>();
+// ponytail: in-memory, hilang saat restart; upgrade ke tabel SQLite kalau spam jadi nyata.
+
+function clampQuantity(raw: number, maxQty: number): number | null {
+  const n = Math.trunc(raw);
+  if (!Number.isFinite(n) || n < 1) {
+    return null;
+  }
+  const cap = Math.min(MAX_ORDER_QTY, maxQty);
+  return cap >= 1 && n <= cap ? n : null;
+}
+
+function consumeOrderCooldown(platform: string, userId: string): boolean {
+  const key = `${platform}:${userId}`;
+  const now = Date.now();
+  const until = orderCooldowns.get(key);
+
+  if (until && until > now) {
+    return false;
+  }
+
+  orderCooldowns.set(key, now + ORDER_COOLDOWN_MS);
+  return true;
+}
+
 async function createTelegramOrder(
   chatId: number,
   from: { id: number; username?: string; first_name?: string },
   productId: string,
   quantity: number,
 ) {
-  if (!Number.isFinite(quantity) || quantity <= 0) {
+  const product = await getProductById(productId);
+
+  if (!product || !product.isActive) {
+    await sendTelegramMessage(chatId, "Produk ini sudah tidak aktif atau tidak ditemukan.");
+    return;
+  }
+
+  const maxQty =
+    product.type === "CUSTOM_TEXT"
+      ? MAX_ORDER_QTY
+      : Math.min(MAX_ORDER_QTY, product.availableStockCount);
+  const qty = clampQuantity(quantity, maxQty);
+
+  if (qty === null) {
     await sendTelegramMessage(chatId, "Jumlah pembelian tidak valid.");
+    return;
+  }
+
+  if (!consumeOrderCooldown("telegram", String(from.id))) {
+    await sendTelegramMessage(chatId, "Tunggu sebentar sebelum membuat order lagi ya.");
     return;
   }
 
@@ -316,7 +361,7 @@ async function createTelegramOrder(
       customerId: String(from.id),
       customerName: from.username || from.first_name || String(from.id),
       productId,
-      quantity,
+      quantity: qty,
     });
 
     const instruction = readPaymentInstruction(order.paymenkuRawJson);

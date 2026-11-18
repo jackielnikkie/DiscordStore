@@ -268,7 +268,7 @@ export const prisma: any = {
       return mapped;
     },
     findUnique: async ({ where, include, select }: any) => {
-      const key = Object.keys(where)[0];
+      const key = column("Product", Object.keys(where)[0]);
       const value = where[key];
       const row = get(`SELECT * FROM Product WHERE ${key} = ?`, value);
 
@@ -351,7 +351,7 @@ export const prisma: any = {
     count: async ({ where }: any) => {
       const clauses: string[] = [];
       const params: SQLParam[] = [];
-      appendWhere(clauses, params, where);
+      appendWhere(clauses, params, where, "StockItem");
       const row = get(
         `SELECT COUNT(*) as count FROM StockItem${clauses.length ? ` WHERE ${clauses.join(" AND ")}` : ""}`,
         ...params,
@@ -361,10 +361,8 @@ export const prisma: any = {
     findMany: async ({ where, orderBy, take, select }: any = {}) => {
       const clauses: string[] = [];
       const params: SQLParam[] = [];
-      appendWhere(clauses, params, where);
-      const order = orderBy
-        ? ` ORDER BY ${Object.keys(orderBy)[0]} ${String(Object.values(orderBy)[0]).toUpperCase()}`
-        : "";
+      appendWhere(clauses, params, where, "StockItem");
+      const order = buildOrderBy(orderBy, "StockItem");
       const limit = take ? ` LIMIT ${Number(take)}` : "";
       const rows = all(
         `${buildSelect("StockItem", select)}${clauses.length ? ` WHERE ${clauses.join(" AND ")}` : ""}${order}${limit}`,
@@ -448,7 +446,7 @@ export const prisma: any = {
       return current ? rowToStock(current) : null;
     },
     groupBy: async ({ by, _count }: any) => {
-      const key = by[0];
+      const key = column("StockItem", by[0]);
       return all(
         `SELECT ${key}, COUNT(*) as _count FROM StockItem GROUP BY ${key} ORDER BY ${key} ASC`,
       ).map((row) => ({
@@ -459,10 +457,10 @@ export const prisma: any = {
   },
   order: {
     aggregate: async ({ _sum, where }: any) => {
-      const field = Object.keys(_sum)[0];
+      const field = column("Order", Object.keys(_sum)[0]);
       const clauses: string[] = [];
       const params: SQLParam[] = [];
-      appendWhere(clauses, params, where);
+      appendWhere(clauses, params, where, "Order");
       const row = get(
         `SELECT SUM(${field}) as total FROM "Order"${clauses.length ? ` WHERE ${clauses.join(" AND ")}` : ""}`,
         ...params,
@@ -470,7 +468,7 @@ export const prisma: any = {
       return { _sum: { [field]: row?.total === null ? 0 : Number(row?.total ?? 0) } };
     },
     groupBy: async ({ by, _count }: any) => {
-      const key = by[0];
+      const key = column("Order", by[0]);
       return all(
         `SELECT ${key}, COUNT(*) as _count FROM "Order" GROUP BY ${key} ORDER BY ${key} ASC`,
       ).map((row) => ({
@@ -481,7 +479,7 @@ export const prisma: any = {
     findMany: async ({ where, orderBy, take, include }: any = {}) => {
       const clauses: string[] = [];
       const params: SQLParam[] = [];
-      appendWhere(clauses, params, where);
+      appendWhere(clauses, params, where, "Order");
       const order = buildOrderBy(orderBy);
       const limit = take ? ` LIMIT ${Number(take)}` : "";
       const rows = all(
@@ -491,7 +489,7 @@ export const prisma: any = {
       return rows.map((row) => withOrderRelations(row, include));
     },
     findUnique: async ({ where, include }: any) => {
-      const key = Object.keys(where)[0];
+      const key = column("Order", Object.keys(where)[0]);
       const value = where[key];
       const row = get(`SELECT * FROM "Order" WHERE ${key} = ?`, value);
       return row ? withOrderRelations(rowToOrder(row), include) : null;
@@ -577,6 +575,18 @@ export const prisma: any = {
     },
   },
   paymentWebhookLog: {
+    deleteMany: async ({ where }: any) => {
+      const clauses: string[] = [];
+      const params: SQLParam[] = [];
+      appendWhere(clauses, params, where, "PaymentWebhookLog");
+
+      if (!clauses.length) {
+        throw new Error("deleteMany PaymentWebhookLog butuh kondisi where");
+      }
+
+      run(`DELETE FROM PaymentWebhookLog WHERE ${clauses.join(" AND ")}`, ...params);
+      return { count: 1 };
+    },
     create: async ({ data }: any) => {
       const now = nowIso();
       const id = data.id || cuid();
@@ -655,48 +665,145 @@ function buildProductSelect(select?: Record<string, unknown>) {
   return buildSelect("Product", select);
 }
 
+// Defense in depth (SEC-06): identifier SQL tidak boleh berasal dari input user.
+// Tambah kolom di sini setiap kali `ensureColumn` dipakai.
+const TABLE_COLUMNS: Record<string, readonly string[]> = {
+  Setting: ["key", "value", "createdAt", "updatedAt"],
+  Product: [
+    "id",
+    "name",
+    "slug",
+    "description",
+    "imageUrl",
+    "price",
+    "bulkPriceJson",
+    "formatLabel",
+    "type",
+    "customText",
+    "deliveryNote",
+    "isActive",
+    "sortOrder",
+    "soldCount",
+    "createdAt",
+    "updatedAt",
+  ],
+  Order: [
+    "id",
+    "referenceId",
+    "platform",
+    "discordUserId",
+    "discordUsername",
+    "productId",
+    "quantity",
+    "unitPrice",
+    "subtotal",
+    "paymentAmount",
+    "status",
+    "paymenkuTrxId",
+    "paymenkuPayUrl",
+    "paymenkuQrUrl",
+    "paymenkuQrString",
+    "paymenkuRawJson",
+    "paymentChannel",
+    "totalFee",
+    "amountReceived",
+    "isSandbox",
+    "expiresAt",
+    "paidAt",
+    "deliveredAt",
+    "deliveryError",
+    "buyAlertSentAt",
+    "createdAt",
+    "updatedAt",
+  ],
+  StockItem: [
+    "id",
+    "productId",
+    "content",
+    "status",
+    "reservedBy",
+    "soldOrderId",
+    "createdAt",
+    "updatedAt",
+  ],
+  PaymentWebhookLog: [
+    "id",
+    "provider",
+    "event",
+    "trxId",
+    "referenceId",
+    "status",
+    "headersJson",
+    "bodyJson",
+    "isValid",
+    "processedAt",
+    "createdAt",
+  ],
+  AdminSession: ["id", "tokenHash", "expiresAt", "createdAt"],
+};
+
+function column(table: string, key: string) {
+  if (!TABLE_COLUMNS[table]?.includes(key)) {
+    throw new Error(`Kolom tidak dikenal: ${table}.${key}`);
+  }
+  return key;
+}
+
+function orderDirection(value: unknown) {
+  const dir = String(value).toUpperCase();
+  if (dir !== "ASC" && dir !== "DESC") {
+    throw new Error(`Arah order tidak dikenal: ${dir}`);
+  }
+  return dir;
+}
+
 function buildSelect(table: string, select?: Record<string, unknown>) {
   if (!select) {
     return `SELECT * FROM ${table}`;
   }
 
-  const keys = Object.keys(select).filter((key) => typeof select[key] !== "object");
+  const keys = Object.keys(select)
+    .filter((key) => typeof select[key] !== "object")
+    .map((key) => column(table, key));
   return `SELECT ${keys.length ? keys.join(", ") : "*"} FROM ${table}`;
 }
 
 function buildProductOrder(orderBy?: Array<Record<string, string>>) {
-  if (!orderBy || !Array.isArray(orderBy) || orderBy.length === 0) {
-    return "";
-  }
-
-  return ` ORDER BY ${orderBy
-    .map((entry) => `${Object.keys(entry)[0]} ${String(Object.values(entry)[0]).toUpperCase()}`)
-    .join(", ")}`;
+  return buildOrderBy(orderBy, "Product");
 }
 
-function buildOrderBy(orderBy?: Record<string, string> | Array<Record<string, string>>) {
+function buildOrderBy(
+  orderBy?: Record<string, string> | Array<Record<string, string>>,
+  table = "Order",
+) {
   if (!orderBy) {
     return "";
   }
 
-  if (Array.isArray(orderBy)) {
-    return ` ORDER BY ${orderBy
-      .map((entry) => `${Object.keys(entry)[0]} ${String(Object.values(entry)[0]).toUpperCase()}`)
-      .join(", ")}`;
-  }
+  const entries = Array.isArray(orderBy) ? orderBy : [orderBy];
+  const parts = entries
+    .filter((entry) => Object.keys(entry).length > 0)
+    .map((entry) => `${column(table, Object.keys(entry)[0])} ${orderDirection(Object.values(entry)[0])}`);
 
-  return ` ORDER BY ${Object.keys(orderBy)[0]} ${String(Object.values(orderBy)[0]).toUpperCase()}`;
+  return parts.length ? ` ORDER BY ${parts.join(", ")}` : "";
 }
 
-function appendWhere(clauses: string[], params: SQLParam[], where?: Record<string, any>) {
+function appendWhere(
+  clauses: string[],
+  params: SQLParam[],
+  where?: Record<string, any>,
+  table = "Order",
+) {
   if (!where) {
     return;
   }
 
-  for (const [key, value] of Object.entries(where)) {
+  for (const [rawKey, value] of Object.entries(where)) {
     if (value === undefined) {
       continue;
     }
+
+    const key = column(table, rawKey);
 
     if (value && typeof value === "object" && "gte" in value) {
       clauses.push(`${key} >= ?`);
