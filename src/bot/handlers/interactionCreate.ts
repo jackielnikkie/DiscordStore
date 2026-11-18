@@ -276,10 +276,15 @@ async function sendInvoiceDm(
     );
   }
 
-  await sendDirectMessage(client, userId, {
+  const message = await sendDirectMessage(client, userId, {
     embeds: [embed],
     components: [paymentButtons],
   });
+
+  // Simpan id pesan invoice supaya bisa dihapus saat pembayaran sukses.
+  await prisma.order
+    .update({ where: { id: order.id }, data: { invoiceMessageId: message.id } })
+    .catch(() => null);
 }
 
 function formatDiscordDate(value?: string | null) {

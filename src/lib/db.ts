@@ -39,6 +39,7 @@ function getDatabase() {
   db.exec(schemaSql);
   // ponytail: CREATE TABLE IF NOT EXISTS tak menambah kolom ke DB lama; ALTER manual cukup sampai ada migrasi sungguhan.
   ensureColumn(db, "Order", "platform", "TEXT NOT NULL DEFAULT 'discord'");
+  ensureColumn(db, "Order", "invoiceMessageId", "TEXT");
   ensureColumn(db, "Product", "deliveryNote", "TEXT");
   globalThis.sqliteDbGlobal = db;
   return db;
@@ -502,8 +503,8 @@ export const prisma: any = {
           id, referenceId, platform, discordUserId, discordUsername, productId, quantity, unitPrice, subtotal,
           paymentAmount, status, paymenkuTrxId, paymenkuPayUrl, paymenkuQrUrl, paymenkuQrString,
           paymenkuRawJson, paymentChannel, totalFee, amountReceived, isSandbox, expiresAt, paidAt,
-          deliveredAt, deliveryError, buyAlertSentAt, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          deliveredAt, deliveryError, invoiceMessageId, buyAlertSentAt, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         data.referenceId,
         data.platform ?? "discord",
@@ -528,6 +529,7 @@ export const prisma: any = {
         data.paidAt ? toIso(data.paidAt) : null,
         data.deliveredAt ? toIso(data.deliveredAt) : null,
         data.deliveryError ?? null,
+        data.invoiceMessageId ?? null,
         data.buyAlertSentAt ? toIso(data.buyAlertSentAt) : null,
         now,
         now,
@@ -542,7 +544,7 @@ export const prisma: any = {
           referenceId = ?, platform = ?, discordUserId = ?, discordUsername = ?, productId = ?, quantity = ?, unitPrice = ?, subtotal = ?,
           paymentAmount = ?, status = ?, paymenkuTrxId = ?, paymenkuPayUrl = ?, paymenkuQrUrl = ?, paymenkuQrString = ?,
           paymenkuRawJson = ?, paymentChannel = ?, totalFee = ?, amountReceived = ?, isSandbox = ?, expiresAt = ?, paidAt = ?,
-          deliveredAt = ?, deliveryError = ?, buyAlertSentAt = ?, updatedAt = ?
+          deliveredAt = ?, deliveryError = ?, invoiceMessageId = ?, buyAlertSentAt = ?, updatedAt = ?
          WHERE id = ?`,
         next.referenceId,
         next.platform ?? "discord",
@@ -567,6 +569,7 @@ export const prisma: any = {
         next.paidAt,
         next.deliveredAt,
         next.deliveryError ?? null,
+        next.invoiceMessageId ?? null,
         next.buyAlertSentAt,
         next.updatedAt,
         where.id,
@@ -712,6 +715,7 @@ const TABLE_COLUMNS: Record<string, readonly string[]> = {
     "paidAt",
     "deliveredAt",
     "deliveryError",
+    "invoiceMessageId",
     "buyAlertSentAt",
     "createdAt",
     "updatedAt",
@@ -889,6 +893,7 @@ CREATE TABLE IF NOT EXISTS "Order" (
   paidAt TEXT,
   deliveredAt TEXT,
   deliveryError TEXT,
+  invoiceMessageId TEXT,
   buyAlertSentAt TEXT,
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,

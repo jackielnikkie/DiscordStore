@@ -2,7 +2,7 @@
 
 Dokumen ini untuk session/engineer berikutnya. Tanpa secret: token, password, dan key **tidak** ditulis di sini (semua ada di `.env` VPS + panel admin).
 
-- Versi aplikasi: **1.1.2** → `src/lib/brand.ts` (`APP_VERSION`, tampil di sidebar `Admin Panel - v1.1.2`)
+- Versi aplikasi: **1.1.3** → `src/lib/brand.ts` (`APP_VERSION`, tampil di sidebar `Admin Panel - v1.1.3`)
 - Repo: `https://github.com/jackielnikkie/DiscordStore.git` (branch `main`)
 - Produksi: `https://55go.biz.id`
 

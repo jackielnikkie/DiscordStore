@@ -75,7 +75,12 @@ export function readPaymentInstruction(rawJson?: string | null): PaymentInstruct
 
 export function buildInstructionLines(
   instruction: PaymentInstruction,
-  options?: { includeQrUrl?: boolean; codeFormat?: "html" | "none" },
+  options?: {
+    includeQrUrl?: boolean;
+    // QR string (payload mentah) tidak dikirim ke buyer secara default.
+    includeQrString?: boolean;
+    codeFormat?: "html" | "none";
+  },
 ) {
   const wrap =
     options?.codeFormat === "html"
@@ -102,7 +107,7 @@ export function buildInstructionLines(
       lines.push(`QRIS: ${instruction.qrUrl}`);
     }
 
-    if (instruction.qrString) {
+    if (instruction.qrString && options?.includeQrString === true) {
       lines.push(`QR string: ${wrap(instruction.qrString)}`);
     }
   }

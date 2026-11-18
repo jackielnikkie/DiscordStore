@@ -89,6 +89,8 @@ export type Order = {
   isSandbox: boolean | null;
   expiresAt: string | null;
   paidAt: string | null;
+  // ID pesan invoice (Telegram message_id / Discord message id) untuk dihapus saat paid.
+  invoiceMessageId: string | null;
   deliveredAt: string | null;
   deliveryError: string | null;
   buyAlertSentAt: string | null;

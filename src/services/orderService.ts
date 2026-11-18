@@ -12,7 +12,7 @@ import {
   renderDeliveryMessage,
   renderProductNote,
 } from "../lib/delivery-format";
-import { sendCustomerMessage } from "../lib/notify";
+import { sendCustomerMessage, removeInvoiceMessage } from "../lib/notify";
 import { formatRupiah, parseMoney } from "../lib/money";
 import { parsePriceTiers, resolveOrderTotal } from "../lib/pricing";
 import {
@@ -376,6 +376,9 @@ export async function deliverOrder(
         content: buildDeliveryFileContent(order.referenceId, stockLines, rawNote),
       },
     });
+
+    // QR sudah tidak relevan setelah paid — hapus pesan invoice (best-effort).
+    await removeInvoiceMessage(order).catch(() => null);
 
     let updated = await prisma.order.update({
       where: { id: order.id },

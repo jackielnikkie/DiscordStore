@@ -103,6 +103,20 @@ assert.ok(buildInstructionLines(cstoreInfo).some((line) => line.includes("999"))
 assert.equal(parsePaymentInstruction({ checkout_url: "https://x" }).kind, "ewallet");
 assert.equal(parsePaymentInstruction(null).kind, "unknown");
 
+// QR string tidak dikirim ke buyer kecuali diminta eksplisit.
+const qrisWithString = parsePaymentInstruction({
+  qr_url: "https://qr.example/x.png",
+  qr_string: "00020101021126",
+});
+assert.equal(qrisWithString.kind, "qris");
+assert.deepEqual(buildInstructionLines(qrisWithString), [
+  "QRIS: https://qr.example/x.png",
+]);
+assert.deepEqual(
+  buildInstructionLines(qrisWithString, { includeQrString: true }),
+  ["QRIS: https://qr.example/x.png", "QR string: 00020101021126"],
+);
+
 assert.equal(escapeHtml('a<b>&"c"'), 'a&lt;b&gt;&amp;"c"');
 assert.equal(
   formatStockBlock("telegram", ["a<b", "x"]),

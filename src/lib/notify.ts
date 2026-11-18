@@ -2,7 +2,7 @@ import { AttachmentBuilder } from "discord.js";
 
 import { sendDirectMessage, withDiscordClient } from "./discord";
 import { getTelegramSettings } from "./settings";
-import { sendTelegramDocument, sendTelegramMessage } from "./telegram";
+import { deleteTelegramMessage, sendTelegramDocument, sendTelegramMessage } from "./telegram";
 
 export type CustomerPlatform = "discord" | "telegram";
 
@@ -70,4 +70,36 @@ export async function sendTelegramAdminAlert(text: string) {
 
   await sendTelegramMessage(settings.telegramAdminChannelId, text);
   return true;
+}
+
+// Hapus pesan invoice (QR) setelah order dibayar, biar QR tidak bisa dipakai lagi.
+// Best-effort: pesan >48 jam atau izin kurang bukan error yang perlu dilaporkan.
+export async function removeInvoiceMessage(order: {
+  platform: string | null;
+  discordUserId: string;
+  invoiceMessageId?: string | null;
+}) {
+  const messageId = order.invoiceMessageId;
+
+  if (!messageId) {
+    return false;
+  }
+
+  try {
+    if (normalizePlatform(order.platform) === "telegram") {
+      await deleteTelegramMessage(order.discordUserId, Number(messageId));
+      return true;
+    }
+
+    await withDiscordClient(async (client) => {
+      const user = await client.users.fetch(order.discordUserId);
+      const dm = await user.createDM(true);
+      const message = await dm.messages.fetch(messageId);
+      await message.delete();
+    });
+
+    return true;
+  } catch {
+    return false;
+  }
 }

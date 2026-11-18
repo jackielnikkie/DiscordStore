@@ -454,17 +454,33 @@ async function createTelegramOrder(
     }
 
     if (order.paymenkuQrUrl) {
-      await sendTelegramPhoto(chatId, order.paymenkuQrUrl, body, keyboard, undefined, "HTML");
+      const sent = await sendTelegramPhoto(
+        chatId,
+        order.paymenkuQrUrl,
+        body,
+        keyboard,
+        undefined,
+        "HTML",
+      );
+      await rememberInvoiceMessage(order.id, sent.message_id);
       return;
     }
 
-    await sendTelegramMessage(chatId, body, keyboard, undefined, "HTML");
+    const sent = await sendTelegramMessage(chatId, body, keyboard, undefined, "HTML");
+    await rememberInvoiceMessage(order.id, sent.message_id);
   } catch (error) {
     await sendTelegramMessage(
       chatId,
       error instanceof Error ? error.message : "Gagal membuat invoice order",
     );
   }
+}
+
+// Simpan id pesan invoice supaya bisa dihapus saat pembayaran sukses.
+async function rememberInvoiceMessage(orderId: string, messageId: number) {
+  await prisma.order
+    .update({ where: { id: orderId }, data: { invoiceMessageId: String(messageId) } })
+    .catch(() => null);
 }
 
 function buildInvoiceCaption(
