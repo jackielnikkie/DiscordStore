@@ -42,6 +42,7 @@ export type TelegramSettings = {
   telegramEnabled: boolean;
   telegramBotToken: string;
   telegramAdminChannelId: string;
+  telegramAdminChannelLocked: boolean;
   telegramCatalogTitle: string;
   telegramForceJoinEnabled: boolean;
   telegramForceJoinChannel: string;
@@ -147,6 +148,7 @@ const telegramDefaults: TelegramSettings = {
   telegramEnabled: false,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
   telegramAdminChannelId: "",
+  telegramAdminChannelLocked: false,
   telegramCatalogTitle: "",
   telegramForceJoinEnabled: false,
   telegramForceJoinChannel: "",
@@ -239,6 +241,10 @@ export async function getAllSettings(): Promise<AppSettings> {
         map.get("telegramBotToken") || telegramDefaults.telegramBotToken,
       telegramAdminChannelId:
         map.get("telegramAdminChannelId") || telegramDefaults.telegramAdminChannelId,
+      telegramAdminChannelLocked: parseBoolean(
+        map.get("telegramAdminChannelLocked"),
+        telegramDefaults.telegramAdminChannelLocked,
+      ),
       telegramCatalogTitle:
         map.get("telegramCatalogTitle") || telegramDefaults.telegramCatalogTitle,
       telegramForceJoinEnabled: parseBoolean(

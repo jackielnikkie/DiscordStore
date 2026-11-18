@@ -299,7 +299,14 @@ export async function saveTelegramSettingsAction(formData: FormData) {
   const redirectTo = getRedirectTarget(formData, "/admin/settings/telegram");
 
   try {
+    const current = await getTelegramSettings();
     const input = telegramSettingsSchema.parse(Object.fromEntries(formData));
+
+    // Channel log terkunci: field di panel diabaikan sampai di-unlock.
+    if (current.telegramAdminChannelLocked) {
+      input.telegramAdminChannelId = current.telegramAdminChannelId;
+    }
+
     await saveTelegramSettings(input, { preserveSecrets: true });
     revalidateEverywhere();
     redirectWithState(
@@ -313,6 +320,28 @@ export async function saveTelegramSettingsAction(formData: FormData) {
       redirectTo,
       "error",
       formatActionError(error, "Telegram settings gagal disimpan"),
+    );
+  }
+}
+
+export async function unlockTelegramLogChannelAction(formData: FormData) {
+  await requireAdminSession();
+  const redirectTo = getRedirectTarget(formData, "/admin/settings/telegram");
+
+  try {
+    await saveTelegramSettings({ telegramAdminChannelLocked: false });
+    revalidateEverywhere();
+    redirectWithState(
+      redirectTo,
+      "message",
+      "Channel log dibuka. Kirim /setlog di channel untuk mengunci ulang.",
+    );
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    redirectWithState(
+      redirectTo,
+      "error",
+      formatActionError(error, "Gagal membuka kunci channel log"),
     );
   }
 }

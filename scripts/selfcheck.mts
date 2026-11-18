@@ -23,12 +23,23 @@ import {
   buildInstructionLines,
   parsePaymentInstruction,
 } from "../src/lib/paymenku-instruction";
-import { buildQtyKeyboard, parseRequiredChannels } from "../src/lib/telegram";
+import {
+  buildQtyKeyboard,
+  isChannelAdminStatus,
+  parseRequiredChannels,
+} from "../src/lib/telegram";
 import { buildCatalogKeyboard } from "../src/bot/telegram/catalog";
 
 assert.equal(normalizePlatform("telegram"), "telegram");
 assert.equal(normalizePlatform(undefined), "discord");
 assert.equal(normalizePlatform("discord"), "discord");
+
+// /setlog: hanya creator/administrator channel yang boleh mengunci channel log.
+assert.equal(isChannelAdminStatus("creator"), true);
+assert.equal(isChannelAdminStatus("administrator"), true);
+assert.equal(isChannelAdminStatus("member"), false);
+assert.equal(isChannelAdminStatus("left"), false);
+assert.equal(isChannelAdminStatus("kicked"), false);
 
 assert.deepEqual(buildQtyKeyboard("pid", 6), [
   [

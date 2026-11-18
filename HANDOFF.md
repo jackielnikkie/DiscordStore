@@ -2,7 +2,7 @@
 
 Dokumen ini untuk session/engineer berikutnya. Tanpa secret: token, password, dan key **tidak** ditulis di sini (semua ada di `.env` VPS + panel admin).
 
-- Versi aplikasi: **1.1.1** → `src/lib/brand.ts` (`APP_VERSION`, tampil di sidebar `Admin Panel - v1.1.1`)
+- Versi aplikasi: **1.1.2** → `src/lib/brand.ts` (`APP_VERSION`, tampil di sidebar `Admin Panel - v1.1.2`)
 - Repo: `https://github.com/jackielnikkie/DiscordStore.git` (branch `main`)
 - Produksi: `https://55go.biz.id`
 
@@ -154,7 +154,7 @@ src/
 ## 6. Yang BELUM selesai / perlu tindakan
 
 ### Konfigurasi (bukan kode)
-1. **`telegramAdminChannelId` masih menunjuk channel "LapakLokal Information"** (`-1003714875617`). Perbaiki: hapus+add bot di channel **log** → tekan tombol "Pakai channel ini sebagai log", atau isi manual. Tombol set-log hanya bisa ditekan creator/admin channel.
+1. **`telegramAdminChannelId`**: kirim `/setlog` di channel log yang benar (bot harus admin). Command ini memverifikasi kamu admin channel, menyimpan ID, dan **menguncinya** supaya tidak ketimpa. Lihat `updatev1.1.2.md`; tombol lama "Pakai channel ini sebagai log" tetap ada (juga mengunci).
 2. **Discord belum aktif** (topbar `Discord Offline`) — token/guild/channel belum diisi.
 3. Stok produk saat ini **0** (sudah di-reset untuk publish) — isi stok asli sebelum jualan.
 4. `allowSandboxDelivery` sudah **false** (jangan dinyalakan saat live).

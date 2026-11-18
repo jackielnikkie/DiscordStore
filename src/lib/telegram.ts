@@ -14,6 +14,12 @@ export type TelegramUpdate = {
     chat: { id: number; type: string; username?: string; first_name?: string };
     from?: { id: number; username?: string; first_name?: string };
   };
+  channel_post?: {
+    message_id: number;
+    text?: string;
+    chat: { id: number; type: string; title?: string; username?: string };
+    from?: { id: number; username?: string; first_name?: string };
+  };
   callback_query?: {
     id: string;
     data?: string;
@@ -97,7 +103,7 @@ export async function getTelegramUpdates(
     {
       offset,
       timeout: timeoutSec,
-      allowed_updates: ["message", "callback_query", "my_chat_member"],
+      allowed_updates: ["message", "callback_query", "my_chat_member", "channel_post"],
     },
     (timeoutSec + 10) * 1000,
   );
@@ -144,6 +150,23 @@ export async function sendTelegramMessage(
       ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
     },
   );
+}
+
+export async function deleteTelegramMessage(
+  chatId: number | string,
+  messageId: number,
+  token?: string,
+) {
+  return call<boolean>(
+    token || (await resolveTelegramToken()),
+    "deleteMessage",
+    { chat_id: chatId, message_id: messageId },
+  );
+}
+
+/** Status getChatMember yang boleh mengubah channel log. */
+export function isChannelAdminStatus(status: string) {
+  return status === "creator" || status === "administrator";
 }
 
 export async function sendTelegramDocument(

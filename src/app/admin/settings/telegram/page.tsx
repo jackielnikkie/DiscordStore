@@ -12,6 +12,7 @@ import { formatRelativeTime, isFresh } from "../../../../lib/status";
 import {
   saveTelegramSettingsAction,
   testTelegramAction,
+  unlockTelegramLogChannelAction,
 } from "../../actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -94,7 +95,11 @@ export default async function TelegramSettingsPage({
               label="Channel Log"
               value={telegram.telegramAdminChannelId || "belum diatur"}
               tone={telegram.telegramAdminChannelId ? "success" : "warning"}
-              hint="buy alert masuk ke chat ini"
+              hint={
+                telegram.telegramAdminChannelLocked
+                  ? "terkunci (dikunci via /setlog)"
+                  : "buy alert masuk ke chat ini"
+              }
             />
             <StatusTile
               label="Gate Join"
@@ -158,6 +163,15 @@ export default async function TelegramSettingsPage({
                 name="telegramAdminChannelId"
                 defaultValue={telegram.telegramAdminChannelId}
                 placeholder="123456789 atau -1001234567890"
+                readOnly={telegram.telegramAdminChannelLocked}
+                hint={
+                  telegram.telegramAdminChannelLocked ? (
+                    <span>
+                      Terkunci. Kirim <code>/setlog</code> di channel log untuk mengunci ke
+                      channel itu, atau tekan Unlock di bawah untuk mengubah manual.
+                    </span>
+                  ) : undefined
+                }
               />
             </div>
             <div className="flex flex-wrap gap-6">
@@ -233,8 +247,13 @@ export default async function TelegramSettingsPage({
           <CardContent className="grid gap-2 text-sm text-muted-foreground">
             <p>1. Buat channel (atau pakai yang sudah ada), lalu buka Channel Settings → Administrators.</p>
             <p>2. Tambahkan bot{telegram.telegramBotUsername ? ` @${telegram.telegramBotUsername}` : " kamu"} sebagai admin (cukup izin kirim pesan).</p>
-            <p>3. Chat ID channel terisi otomatis di kolom di atas <strong>hanya jika kolom masih kosong</strong> — channel log yang sudah diatur tidak akan ditimpa saat bot ditambahkan ke channel lain.</p>
-            <p>4. Kalau ingin manual: jadikan channel publik, lalu isi <code>@username</code>-nya.</p>
+            <p>
+              3. <strong>Cara disarankan:</strong> kirim <code>/setlog</code> di channel itu.
+              Bot memverifikasi kamu admin channel, menyimpan chat ID, lalu <strong>mengunci</strong>-nya
+              supaya tidak ketimpa saat bot ditambahkan ke channel lain. Pesan command dihapus otomatis.
+            </p>
+            <p>4. Alternatif: chat ID terisi otomatis saat bot ditambahkan ke channel <strong>hanya jika kolom masih kosong</strong> (belum terkunci).</p>
+            <p>5. Manual: jadikan channel publik, lalu isi <code>@username</code>-nya di kolom atas.</p>
             <p>
               Chat ID terdeteksi: <span className="font-mono text-foreground">{telegram.telegramAdminChannelId || "belum ada"}</span>
             </p>
@@ -252,6 +271,14 @@ export default async function TelegramSettingsPage({
             Test Connection
           </Button>
         </form>
+        {telegram.telegramAdminChannelLocked ? (
+          <form action={unlockTelegramLogChannelAction}>
+            <input type="hidden" name="redirectTo" value="/admin/settings/telegram" />
+            <Button variant="outline" type="submit">
+              Unlock Channel Log
+            </Button>
+          </form>
+        ) : null}
       </div>
     </AppShell>
   );
@@ -263,17 +290,25 @@ function Field({
   defaultValue,
   placeholder,
   hint,
+  readOnly,
 }: {
   label: string;
   name: string;
   defaultValue?: string;
   placeholder?: string;
   hint?: React.ReactNode;
+  readOnly?: boolean;
 }) {
   return (
     <div className="grid gap-2">
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} defaultValue={defaultValue} placeholder={placeholder} />
+      <Input
+        id={name}
+        name={name}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        readOnly={readOnly}
+      />
       {hint ? (
         <div className="grid gap-1 text-xs text-muted-foreground">{hint}</div>
       ) : null}

@@ -9,8 +9,10 @@ import { getAllSettings, getTelegramSettings, saveTelegramSettings } from "../..
 import {
   answerCallbackQuery,
   buildQtyKeyboard,
+  deleteTelegramMessage,
   exportTelegramInviteLink,
   getTelegramChatMember,
+  isChannelAdminStatus,
   parseRequiredChannels,
   sendTelegramMessage,
   sendTelegramPhoto,
@@ -25,6 +27,11 @@ import { buildCatalogKeyboard, buildCatalogText } from "./catalog";
 export async function handleTelegramUpdate(update: TelegramUpdate) {
   if (update.my_chat_member) {
     await handleMyChatMember(update.my_chat_member);
+    return;
+  }
+
+  if (update.channel_post) {
+    await handleChannelPost(update.channel_post);
     return;
   }
 
@@ -52,6 +59,14 @@ async function handleMyChatMember(
   const current = settings.telegramAdminChannelId;
   const detected = String(update.chat.id);
 
+  if (settings.telegramAdminChannelLocked) {
+    await sendTelegramMessage(
+      update.chat.id,
+      `Bot terhubung. Channel log terkunci ke ${current} — ubah lewat panel admin kalau perlu.`,
+    ).catch(() => null);
+    return;
+  }
+
   // Jangan pernah menimpa channel log yang sudah diatur admin.
   if (current) {
     await sendTelegramMessage(
@@ -77,6 +92,55 @@ async function handleMyChatMember(
     update.chat.id,
     "Bot terhubung. Chat ini dipakai sebagai channel log store.",
   ).catch(() => null);
+}
+
+async function handleChannelPost(post: NonNullable<TelegramUpdate["channel_post"]>) {
+  const command = (post.text || "").trim().split(/\s+/)[0].split("@")[0];
+
+  if (command !== "/setlog") {
+    return;
+  }
+
+  const chatId = post.chat.id;
+  const settings = await getTelegramSettings();
+
+  try {
+    if (!post.from?.id) {
+      return;
+    }
+
+    const member = await getTelegramChatMember(
+      chatId,
+      post.from.id,
+      settings.telegramBotToken,
+    );
+
+    if (!isChannelAdminStatus(member.status)) {
+      await sendTelegramMessage(
+        chatId,
+        "Hanya admin channel yang bisa mengunci channel log.",
+      ).catch(() => null);
+      return;
+    }
+
+    await saveTelegramSettings({
+      telegramAdminChannelId: String(chatId),
+      telegramAdminChannelLocked: true,
+    });
+
+    await sendTelegramMessage(
+      chatId,
+      "Channel log dikunci ke channel ini. Buy alert akan masuk ke sini. Untuk mengubah, buka panel admin → Settings → Telegram.",
+    ).catch(() => null);
+  } catch {
+    await sendTelegramMessage(chatId, "Gagal memverifikasi admin channel.").catch(
+      () => null,
+    );
+  } finally {
+    await deleteTelegramMessage(chatId, post.message_id, settings.telegramBotToken).catch(
+      () => null,
+    );
+  }
 }
 
 async function handleMessage(message: NonNullable<TelegramUpdate["message"]>) {
@@ -220,6 +284,14 @@ async function handleCallback(callback: NonNullable<TelegramUpdate["callback_que
     const channelId = data.slice("setlog:".length);
     const settings = await getTelegramSettings();
 
+    if (settings.telegramAdminChannelLocked) {
+      await answerCallbackQuery(
+        callback.id,
+        "Channel log terkunci. Ubah lewat panel admin.",
+      ).catch(() => null);
+      return;
+    }
+
     try {
       const member = await getTelegramChatMember(
         channelId,
@@ -227,7 +299,7 @@ async function handleCallback(callback: NonNullable<TelegramUpdate["callback_que
         settings.telegramBotToken,
       );
 
-      if (!["creator", "administrator"].includes(member.status)) {
+      if (!isChannelAdminStatus(member.status)) {
         await answerCallbackQuery(
           callback.id,
           "Hanya admin channel yang bisa mengubah channel log.",
@@ -235,11 +307,16 @@ async function handleCallback(callback: NonNullable<TelegramUpdate["callback_que
         return;
       }
 
-      await saveTelegramSettings({ telegramAdminChannelId: channelId });
-      await answerCallbackQuery(callback.id, "Channel log diperbarui.").catch(() => null);
+      await saveTelegramSettings({
+        telegramAdminChannelId: channelId,
+        telegramAdminChannelLocked: true,
+      });
+      await answerCallbackQuery(callback.id, "Channel log diperbarui & dikunci.").catch(
+        () => null,
+      );
       await sendTelegramMessage(
         chatId,
-        "Channel log store sekarang memakai channel ini. Buy alert akan masuk ke sini.",
+        "Channel log store sekarang memakai channel ini (terkunci). Buy alert akan masuk ke sini.",
       ).catch(() => null);
     } catch {
       await answerCallbackQuery(callback.id, "Gagal memverifikasi admin channel.").catch(
