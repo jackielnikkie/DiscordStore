@@ -5,7 +5,8 @@ import { AppShell } from "../../../../components/app-shell";
 import { Notice } from "../../../../components/notice";
 import { ProductForm } from "../../../../components/product-form";
 import { getProductById } from "../../../../services/productService";
-import { saveProductAction } from "../../actions";
+import { saveProductAction, toggleProductActiveAction } from "../../actions";
+import { Button } from "@/components/ui/button";
 
 export default async function EditProductPage({
   params,
@@ -26,9 +27,18 @@ export default async function EditProductPage({
       title={product.name}
       description="Edit detail produk, harga, tipe delivery, dan properti embed."
       actions={
-        <Link href={`/admin/products/${product.id}/stock`} className="btn-secondary">
-          Kelola Stok
-        </Link>
+        <div className="flex items-center gap-2">
+          <form action={toggleProductActiveAction}>
+            <input type="hidden" name="productId" value={product.id} />
+            <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
+            <Button variant={product.isActive ? "secondary" : "default"} size="sm">
+              {product.isActive ? "Nonaktifkan produk" : "Aktifkan produk"}
+            </Button>
+          </form>
+          <Link href={`/admin/products/${product.id}/stock`} className="btn-secondary">
+            Kelola Stok
+          </Link>
+        </div>
       }
     >
       <Notice

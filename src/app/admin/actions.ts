@@ -126,6 +126,42 @@ export async function saveProductAction(formData: FormData) {
   }
 }
 
+export async function toggleProductActiveAction(formData: FormData) {
+  await requireAdminSession();
+  const redirectTo = getRedirectTarget(formData, "/admin/products");
+
+  try {
+    const productId = asString(formData.get("productId"));
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+
+    if (!product) {
+      throw new Error("Produk tidak ditemukan");
+    }
+
+    const nextActive = !product.isActive;
+    await prisma.product.update({
+      where: { id: productId },
+      data: { isActive: nextActive },
+    });
+    await requestEmbedSync();
+    revalidateEverywhere();
+    redirectWithState(
+      redirectTo,
+      "message",
+      nextActive
+        ? `Produk "${product.name}" diaktifkan`
+        : `Produk "${product.name}" dinonaktifkan`,
+    );
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    redirectWithState(
+      redirectTo,
+      "error",
+      formatActionError(error, "Gagal mengubah status produk"),
+    );
+  }
+}
+
 export async function deleteProductAction(formData: FormData) {
   await requireAdminSession();
   const productId = asString(formData.get("productId"));

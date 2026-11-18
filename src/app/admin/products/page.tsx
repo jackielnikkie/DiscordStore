@@ -8,7 +8,7 @@ import { formatRupiah } from "../../../lib/money";
 import { listProductsWithStock, type ProductWithStock } from "../../../services/productService";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { deleteProductAction } from "../actions";
+import { deleteProductAction, toggleProductActiveAction } from "../actions";
 import Image from "next/image";
 
 export default async function ProductsPage({
@@ -138,6 +138,13 @@ export default async function ProductsPage({
                       <Link href={`/admin/products/${product.id}/stock`}>
                         <Button variant="outline" size="sm">Stock</Button>
                       </Link>
+                      <form action={toggleProductActiveAction}>
+                        <input type="hidden" name="productId" value={product.id} />
+                        <input type="hidden" name="redirectTo" value="/admin/products" />
+                        <Button variant={product.isActive ? "secondary" : "default"} size="sm">
+                          {product.isActive ? "Nonaktifkan" : "Aktifkan"}
+                        </Button>
+                      </form>
                       <form action={deleteProductAction}>
                         <input type="hidden" name="productId" value={product.id} />
                         <input type="hidden" name="redirectTo" value="/admin/products" />
