@@ -12,10 +12,12 @@ import {
 import { slugify } from "../src/lib/slug";
 import { maskStockContent, parseStockIds } from "../src/lib/stock-mask";
 import {
+  buildDeliveryFileContent,
   buildDeliveryFileName,
   escapeHtml,
   formatStockBlock,
   renderDeliveryMessage,
+  renderProductNote,
 } from "../src/lib/delivery-format";
 import {
   buildInstructionLines,
@@ -106,10 +108,22 @@ assert.equal(
 );
 assert.equal(buildDeliveryFileName("ORDER-20261117-123"), "order-ORDER-20261117-123.txt");
 
-assert.equal(maskStockContent("abcdefgh"), "ab••••gh");
-assert.equal(maskStockContent("abcd"), "••••");
+assert.equal(maskStockContent("abcdefgh"), "ab••••gh");assert.equal(maskStockContent("abcd"), "••••");
 assert.equal(parseStockIds("a, b\nc,, a").join(","), "a,b,c");
 assert.equal(parseStockIds("   ").length, 0);
+
+assert.equal(
+  renderProductNote("Base URL: https://api.coralbricks.com/v1\nPakai <key> ini", { productName: "X" }, "telegram"),
+  "Base URL: <code>https://api.coralbricks.com/v1</code>\nPakai &lt;key&gt; ini",
+);
+assert.equal(
+  renderProductNote("Produk {{productName}} ref {{referenceId}}", { productName: "Coral", referenceId: "ORDER-1" }, "discord"),
+  "Produk Coral ref ORDER-1",
+);
+assert.equal(renderProductNote("   ", {}, "telegram"), "");
+assert.ok(
+  buildDeliveryFileContent("ORDER-1", ["akun1"], "Catatan endpoint").includes("Catatan endpoint"),
+);
 
 // migrasi kolom platform harus ada di DB lama maupun baru
 const order = await prisma.order.findMany({ take: 1 });

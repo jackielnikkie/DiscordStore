@@ -47,6 +47,7 @@ export type Product = {
   formatLabel: string | null;
   type: ProductType;
   customText: string | null;
+  deliveryNote: string | null;
   isActive: boolean;
   sortOrder: number;
   soldCount: number;

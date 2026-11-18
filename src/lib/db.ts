@@ -39,6 +39,7 @@ function getDatabase() {
   db.exec(schemaSql);
   // ponytail: CREATE TABLE IF NOT EXISTS tak menambah kolom ke DB lama; ALTER manual cukup sampai ada migrasi sungguhan.
   ensureColumn(db, "Order", "platform", "TEXT NOT NULL DEFAULT 'discord'");
+  ensureColumn(db, "Product", "deliveryNote", "TEXT");
   globalThis.sqliteDbGlobal = db;
   return db;
 }
@@ -284,8 +285,8 @@ export const prisma: any = {
       run(
         `INSERT INTO Product (
           id, name, slug, description, imageUrl, price, bulkPriceJson, formatLabel,
-          type, customText, isActive, sortOrder, soldCount, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          type, customText, deliveryNote, isActive, sortOrder, soldCount, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         data.name,
         data.slug,
@@ -296,6 +297,7 @@ export const prisma: any = {
         data.formatLabel ?? null,
         data.type ?? ProductType.STOCK_LINE,
         data.customText ?? null,
+        data.deliveryNote ?? null,
         data.isActive ? 1 : 0,
         Number(data.sortOrder ?? 0),
         Number(data.soldCount ?? 0),
@@ -319,7 +321,7 @@ export const prisma: any = {
       run(
         `UPDATE Product SET
           name = ?, slug = ?, description = ?, imageUrl = ?, price = ?, bulkPriceJson = ?,
-          formatLabel = ?, type = ?, customText = ?, isActive = ?, sortOrder = ?, soldCount = ?, updatedAt = ?
+          formatLabel = ?, type = ?, customText = ?, deliveryNote = ?, isActive = ?, sortOrder = ?, soldCount = ?, updatedAt = ?
          WHERE id = ?`,
         next.name,
         next.slug,
@@ -330,6 +332,7 @@ export const prisma: any = {
         next.formatLabel ?? null,
         next.type,
         next.customText ?? null,
+        next.deliveryNote ?? null,
         next.isActive ? 1 : 0,
         Number(next.sortOrder ?? 0),
         Number(next.soldCount ?? 0),
@@ -746,6 +749,7 @@ CREATE TABLE IF NOT EXISTS Product (
   formatLabel TEXT,
   type TEXT NOT NULL DEFAULT '${ProductType.STOCK_LINE}',
   customText TEXT,
+  deliveryNote TEXT,
   isActive INTEGER NOT NULL DEFAULT 1,
   sortOrder INTEGER NOT NULL DEFAULT 0,
   soldCount INTEGER NOT NULL DEFAULT 0,

@@ -78,6 +78,7 @@ export const productSchema = z.object({
   formatLabel: z.string().trim().optional().or(z.literal("")),
   type: z.nativeEnum(ProductType),
   customText: z.string().trim().optional().or(z.literal("")),
+  deliveryNote: z.string().trim().max(2000, "Catatan maksimal 2000 karakter").optional().or(z.literal("")),
   isActive: stringToBoolean(false),
   sortOrder: stringToInt(),
 });

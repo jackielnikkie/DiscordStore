@@ -164,6 +164,22 @@ export default async function OrderDetailPage({
       ) : null}
 
       <Card className="mt-6">
+        <CardHeader><CardTitle>Catatan Pengiriman</CardTitle></CardHeader>
+        <CardContent className="p-4">
+          {(order.product as { deliveryNote?: string | null }).deliveryNote ? (
+            <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap break-all">
+              {(order.product as { deliveryNote?: string | null }).deliveryNote}
+            </pre>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Produk ini tidak punya catatan pengiriman. Isi di halaman edit produk
+              (blok Type &amp; Delivery) agar buyer dapat panduan endpoint.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
         <CardHeader><CardTitle>Stock Items</CardTitle></CardHeader>
         <CardContent className="space-y-2 p-4">
           {stockLines.length > 0 ? (

@@ -219,6 +219,21 @@ export function ProductForm({ action, redirectTo, product }: ProductFormProps) {
             rows={2}
           />
         </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="deliveryNote">Catatan Pengiriman (opsional)</Label>
+          <Textarea
+            id="deliveryNote"
+            name="deliveryNote"
+            defaultValue={product?.deliveryNote || ""}
+            rows={4}
+            placeholder={"Contoh:\nBase URL: https://api.coralbricks.com/v1\nDocs: https://docs.coralbricks.com"}
+          />
+          <p className="text-xs text-muted-foreground">
+            Dikirim setelah data produk (juga masuk file .txt). Placeholder:
+            {" {{productName}}, {{referenceId}}, {{quantity}}"}
+          </p>
+        </div>
       </fieldset>
 
       <div className="flex items-center gap-4">

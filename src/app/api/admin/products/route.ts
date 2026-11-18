@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
         formatLabel: emptyToNull(input.formatLabel),
         type: input.type,
         customText: emptyToNull(input.customText),
+        deliveryNote: emptyToNull(input.deliveryNote),
         isActive: input.isActive,
         sortOrder: input.sortOrder,
       },

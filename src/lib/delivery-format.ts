@@ -45,12 +45,51 @@ export function buildDeliveryFileName(referenceId: string) {
   return `order-${referenceId.replace(/[^A-Za-z0-9-]/g, "")}.txt`;
 }
 
-export function buildDeliveryFileContent(referenceId: string, lines: string[]) {
+export function buildDeliveryFileContent(
+  referenceId: string,
+  lines: string[],
+  note?: string | null,
+) {
   return [
     `Order: ${referenceId}`,
     `Tanggal: ${new Date().toISOString()}`,
     "",
+    ...(note && note.trim() ? ["Catatan:", note.trim(), ""] : []),
     ...lines,
     "",
   ].join("\n");
+}
+
+/**
+ * Catatan produk yang ditempel setelah blok stok. Telegram: HTML-escape + URL
+ * dibungkus <code> (tap-copy, tidak salah klik). Discord: teks apa adanya.
+ */
+export function renderProductNote(
+  note: string | null | undefined,
+  context: Record<string, string | number>,
+  platform: string,
+) {
+  if (!note?.trim()) {
+    return "";
+  }
+
+  const rendered = note
+    .replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key: string) => {
+      const value = context[key];
+      return value === undefined || value === null ? "" : String(value);
+    })
+    .trim();
+
+  if (!rendered) {
+    return "";
+  }
+
+  if (platform === "telegram") {
+    return escapeHtml(rendered).replace(
+      /https?:\/\/[^\s<]+/g,
+      (url) => `<code>${url}</code>`,
+    );
+  }
+
+  return rendered;
 }

@@ -14,6 +14,7 @@ export type ProductWithStock = {
   formatLabel: string | null;
   type: ProductType;
   customText: string | null;
+  deliveryNote: string | null;
   isActive: boolean;
   sortOrder: number;
   soldCount: number;

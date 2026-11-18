@@ -10,6 +10,7 @@ import {
   buildDeliveryFileContent,
   buildDeliveryFileName,
   renderDeliveryMessage,
+  renderProductNote,
 } from "../lib/delivery-format";
 import { sendCustomerMessage } from "../lib/notify";
 import { formatRupiah, parseMoney } from "../lib/money";
@@ -334,22 +335,37 @@ export async function deliverOrder(
     stockLines.length > 40
       ? [...stockLines.slice(0, 40), `… dan ${stockLines.length - 40} data lain (lihat file .txt)`]
       : stockLines;
-  const message = renderDeliveryMessage(
-    settings.text.dmPaymentSuccessText,
-    {
-      productName: order.product.name,
-      quantity: order.quantity,
-      price: formatRupiah(order.subtotal),
-      paymentAmount: formatRupiah(order.paymentAmount || order.subtotal),
-      payUrl: order.paymenkuPayUrl || "",
-      qrUrl: order.paymenkuQrUrl || "",
-      expirationDate: order.expiresAt || "",
-      referenceId: order.referenceId,
-      trxId: order.paymenkuTrxId || "",
-    },
+  const noteContext = {
+    productName: order.product.name,
+    quantity: order.quantity,
+    referenceId: order.referenceId,
+  };
+  const productNote = renderProductNote(
+    (order.product as { deliveryNote?: string | null }).deliveryNote,
+    noteContext,
     order.platform,
-    messageLines,
   );
+  const message = [
+    renderDeliveryMessage(
+      settings.text.dmPaymentSuccessText,
+      {
+        productName: order.product.name,
+        quantity: order.quantity,
+        price: formatRupiah(order.subtotal),
+        paymentAmount: formatRupiah(order.paymentAmount || order.subtotal),
+        payUrl: order.paymenkuPayUrl || "",
+        qrUrl: order.paymenkuQrUrl || "",
+        expirationDate: order.expiresAt || "",
+        referenceId: order.referenceId,
+        trxId: order.paymenkuTrxId || "",
+      },
+      order.platform,
+      messageLines,
+    ),
+    ...(productNote ? ["", "Catatan:", productNote] : []),
+  ].join("\n");
+
+  const rawNote = (order.product as { deliveryNote?: string | null }).deliveryNote || "";
 
   const run = async () => {
     await sendCustomerMessage(order.platform, order.discordUserId, {
@@ -357,7 +373,7 @@ export async function deliverOrder(
       parseMode: order.platform === "telegram" ? "HTML" : undefined,
       file: {
         name: buildDeliveryFileName(order.referenceId),
-        content: buildDeliveryFileContent(order.referenceId, stockLines),
+        content: buildDeliveryFileContent(order.referenceId, stockLines, rawNote),
       },
     });
 
